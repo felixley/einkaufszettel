@@ -1,0 +1,245 @@
+.container {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  padding-bottom: 2rem;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.backBtn {
+  min-width: 48px;
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 1.25rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.backBtn:active {
+  transform: scale(0.98);
+}
+
+.title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.form {
+  flex: 1;
+  width: 100%;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  min-height: 52px;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 1.05rem;
+  font-family: inherit;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.row {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.grow {
+  flex: 1;
+}
+
+.statusCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+}
+
+.statusTitle {
+  margin: 0;
+  font-weight: 600;
+}
+
+.muted {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.toggle {
+  position: relative;
+  width: 64px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.toggleOn {
+  background: var(--success-fg);
+  border-color: var(--success-fg);
+}
+
+.toggleKnob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.toggleOn .toggleKnob {
+  transform: translateX(28px);
+}
+
+.actions {
+  margin-top: 0.5rem;
+  position: sticky;
+  bottom: 1rem;
+}
+
+.saveBtn {
+  width: 100%;
+  min-height: 56px;
+  border: none;
+  border-radius: 0.9rem;
+  background: var(--primary);
+  color: var(--primary-fg);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.linkBtn {
+  align-self: center;
+  background: none;
+  border: none;
+  color: var(--danger-fg);
+  font-size: 0.95rem;
+  padding: 0.75rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.confirmCard {
+  border: 1px solid var(--danger-fg);
+  border-radius: 0.75rem;
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+  padding: 0.9rem;
+}
+
+.confirmText {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.dangerBtn,
+.secondaryBtn {
+  flex: 1;
+  min-height: 48px;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dangerBtn {
+  border: none;
+  background: var(--danger-fg);
+  color: var(--danger-bg);
+}
+
+.secondaryBtn {
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
+}
+
+.centered {
+  margin: 3rem auto;
+  text-align: center;
+  padding: 0 1rem;
+}
+
+.errorText {
+  color: var(--danger-fg);
+}

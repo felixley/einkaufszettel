@@ -1,0 +1,211 @@
+.container {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  padding-bottom: 80px; /* space for sticky add bar */
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header h1 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.list {
+  flex: 1;
+  width: 100%;
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.categoryGroup {
+  margin-bottom: 1.5rem;
+}
+
+.categoryGroup h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+  padding-left: 0.25rem;
+}
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  min-height: 56px;
+  border-radius: 0.5rem;
+  margin-bottom: 0.25rem;
+  transition: background 0.1s ease;
+}
+
+.itemRow:active {
+  background: var(--border);
+}
+
+.checkbox {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.checkbox.checked {
+  background: var(--success-fg);
+  border-color: var(--success-fg);
+}
+
+.checkbox.checked::after {
+  content: '✓';
+  color: var(--card);
+  font-size: 1rem;
+}
+
+.itemContent {
+  flex: 1;
+  text-decoration: none;
+  color: var(--fg);
+}
+
+.itemName {
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+.itemDetails {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.deleteBtn {
+  background: none;
+  border: none;
+  color: var(--danger-fg);
+  font-size: 1.2rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.completedSection {
+  margin-top: 2rem;
+  opacity: 0.7;
+}
+
+.completedSection h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+  padding-left: 0.25rem;
+}
+
+.addBar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  z-index: 20;
+  max-width: 32rem;
+  margin: 0 auto;
+}
+
+.addInput {
+  flex: 1;
+  min-height: 52px;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.addInput:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.addBtn {
+  min-width: 56px;
+  min-height: 56px;
+  border: none;
+  border-radius: 0.75rem;
+  background: var(--primary);
+  color: var(--primary-fg);
+  font-size: 1.5rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.addBtn:disabled {
+  opacity: 0.6;
+}
+
+.undoToast {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--fg);
+  color: var(--bg);
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 30;
+  white-space: nowrap;
+}
+
+.undoToast button {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.centered {
+  margin: 3rem auto;
+  text-align: center;
+  padding: 0 1rem;
+}
