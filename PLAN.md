@@ -158,3 +158,37 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
 ## 7. Start-Prompt für Hermes
 
 > Lies `PLAN.md` vollständig. Arbeite die Aufgaben der Reihe nach ab, beginnend mit T1.1. Beachte Abschnitt 0 (Arbeitsregeln). Nach jeder Aufgabe: Tests ausführen, Checkbox abhaken, committen. Halte an jedem 🛑 Human Gate an und fasse den Stand zusammen (was fertig, was entschieden, offene Fragen). Bei Blockern: Problem + Optionen + deine Empfehlung dokumentieren, dann mit der Empfehlung fortfahren, sofern keine Sicherheits- oder Datenverlust-Relevanz besteht.
+
+---
+
+## Anhang A — MVP-Slice: Umfang und testbare Akzeptanzkriterien
+
+*Ergänzung von architect (Datum: 2026-10-25) auf Basis der PO-Fassung. Additiv: Die Abschnitte 0–7 bleiben unverändert maßgeblich. Die AKs in §5 bleiben die verbindliche Kurzform; dieser Anhang präzisiert sie auf Prüf-Ebene (Feature → Kriterium → Nachweis) und legt den MVP-Umfang fest.*
+
+### A.1 Definition MVP-Slice
+
+Der MVP ist **Phase 2** aus §5: eine kollaborative Einkaufsliste, die bereits local-first arbeitet. Er ist erreicht, wenn ein Haushalt mit ≥2 Personen eine Liste auf zwei Geräten gleichzeitig pflegen kann, Änderungen in <2 s ankommen, Offline-Eingaben nach Reconnect verlustfrei synchronisieren und Artikel automatisch kategorisiert sowie mengenmäßig zusammengefasst werden.
+
+**Im MVP enthalten (Modelle/Features):**
+- `profiles`, `households`, `household_members`, `invites`, `lists`, `list_items`, `categories`, `category_rules` (aus §4.1)
+- Auth (Registrierung/Login/Logout/Passwort-Reset), Haushalt + Liste, Einladung per Link/QR mit Rollen, Mitgliederverwaltung
+- Artikel-CRUD mit Abhaken/Undo, Kategorien-Gruppierung
+- Dexie-Datenschicht + Outbox + Sync-Worker + Realtime, LWW-Konfliktauflösung, RPC `add_to_list`
+- Auto-Kategorisierung (regelbasiert) und Duplikat-Zusammenfassung beim manuellen Hinzufügen
+
+**Nicht im MVP (erst Phase 3+):** Rezepte, Portionsrechner, „Auf die Liste“ aus Rezepten, Einheiten-Parser/Bruchzahlen-Formatter, PWA-Install/Service-Worker-Härtung, Offline-E2E-Vollsuite, Lasttest. `recipes`/`recipe_ingredients` werden in T1.4 **migriert**, aber im MVP nicht bebaut.
+
+### A.2 Testbare Akzeptanzkriterien je MVP-Feature
+
+| # | Feature (Plan-ID) | Testbares Akzeptanzkriterium | Nachweis / Artefakt |
+|---|---|---|---|
+| A-1 | Auth (T2.1) | Ein E2E-Test durchläuft Register → Login → Logout; eine geschützte Route ist ohne Session nicht erreichbar (Redirect/401). | Playwright-Test grün in CI; Testdatei im Commit genannt |
+| A-2 | Haushalt + Liste (T2.2) | Nutzer A legt Haushalt + Standardliste an; Nutzer B (nicht Mitglied) sieht diesen Haushalt weder in Listen- noch in Detailansicht. | E2E-Test mit zwei Browser-Kontexten; DB-Assertion auf 0 sichtbare Zeilen für B |
+| A-3 | Einladung Link/QR (T2.3) | Einladung ist einlösbar, die gewählte Rolle greift danach, ein abgelaufener Link wird abgelehnt (Fehlercode/-meldung). | E2E-Test (3 Fälle) + pgTAP-Test für `invites`-Ablauf |
+| A-4 | Mitgliederverwaltung (T2.4) | Rolle änderbar (Editor→Viewer wirkt sofort auf Schreibrecht); Entfernen entzieht Zugriff; letzter Owner kann nicht austreten. | E2E + pgTAP/Unit-Test für „letzter Owner“-Regel |
+| A-5 | Offline-First-Sync (T2.5) | Konfliktfälle getestet: gleichzeitiges Abhaken (idempotent, ein Endzustand), Edit vs. Delete (Delete gewinnt), doppeltes Outbox-Replay (kein Duplikat). Reconnect spielt Outbox vollständig ab. | Vitest-Unit-/Integrationstests; Testnamen im Commit; Outbox-Replay-Test mit 2× Abspielen |
+| A-6 | Listen-UI (T2.6) | Zwei Browser-Kontexte: Änderung von A erscheint bei B in <2 s; abgehakte Artikel stehen unten; Löschen ist per Undo rückgängig machbar. | Playwright-Test mit gemessener Latenz-Assertion |
+| A-7 | Auto-Kategorisierung (T2.7) | Seed-Testset mit ≥50 deutschen Artikeln erreicht ≥85 % Trefferquote; eine manuelle Korrektur erzeugt eine Haushaltsregel, die beim nächsten gleichen Artikel greift. | Vitest-Test + Trefferquoten-Ausgabe im CI-Log |
+| A-8 | Duplikat-Zusammenfassung (T2.8) | Gleicher `name_normalized` + gleiche Dimension → Mengen werden addiert und ein Hinweis angezeigt; unterschiedliche Dimension → eigene Zeile. | Unit-Tests (2 Fälle) + UI-Assertion im E2E |
+
+**Querschnitt (gilt für alle A-1…A-8):** `pnpm lint && pnpm typecheck && pnpm test` grün; keine Secrets im Repo; Datenbankänderungen nur als Migration; RLS bleibt für jeden neuen Schreibpfad aktiv (pgTAP-Nachweis).

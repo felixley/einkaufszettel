@@ -13,13 +13,17 @@ parallel zu Backend (T1.4, T1.5); Doku T1.6 liegt beim architect und beim fronte
 Danach 🛑 **Human Gate 1** (Schema, RLS-Konzept, Wireframes freigeben) — QA unterstützt
 die Abnahme, entscheidet aber nicht.
 
-> **Achtung, Planwechsel:** Die bereits angelegten Kanban-Karten `t_129c433d` (devops),
+> **Status Planwechsel (geklärt):** Die fünf Kanban-Karten `t_129c433d` (devops),
 > `t_ebc6addd` (backend), `t_adcb479b` (frontend), `t_2f8b0143` (core) und `t_8c46ba0e`
 > (QA) wurden auf Basis der **alten** Planfassung geschnitten (u. a. `npm` statt `pnpm`,
 > Tabelle `items` statt `list_items`, PWA ohne HTTPS/Caddy, ein Zettel statt Haushalte).
-> Sie sind inhaltlich überholt. Vor Start müssen sie auf die unten genannten T1.x-Aufträge
-> umgeschnitten werden; der Karten-Body allein ist **nicht** maßgeblich. Core hat in
-> Phase 1 keine Aufgabe.
+> **Der Karten-Body ist nicht maßgeblich** — maßgeblich sind der Auftrag unten und die
+> AKs in `PLAN.md` §5. Die Re-Scopes stehen als Kommentar an der jeweiligen Karte:
+> devops → T1.1/T1.2/T1.3/T1.7, backend → T1.4/T1.5, frontend → T1.6b,
+> QA → Abnahme T1.1–T1.7. **Core (`t_2f8b0143`) hat in Phase 1 keine Aufgabe** und ist
+> als „STOP — nicht starten“ markiert; erste Core-Arbeit ist T2.7 (Phase 2) bzw. T3.1. Der MVP-Slice ist in `PLAN.md`
+> **Anhang A** definiert (Feature → testbares AK → Nachweis); Anhang A ist additiv und
+> ändert §0–§7 nicht.
 
 ---
 
@@ -151,5 +155,6 @@ die Abnahme, entscheidet aber nicht.
 
 ---
 
-**Nächster Schritt:** Karten neu schneiden (Orchestrator/PO), dann T1.1 starten.
+**Nächster Schritt:** Re-Scope-Kommentare an den Karten beachten (Body ignorieren),
+dann T1.1 starten. MVP-Feature-AKs für Phase 2: `PLAN.md` Anhang A (A-1…A-8).
 Rückmeldung an architect: Commit-Hash, erfüllte T1.x/AK, offene Punkte.
