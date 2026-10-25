@@ -424,13 +424,13 @@ Ziel: Beleg, dass der **echte** Auth-Pfad (`@supabase/ssr` gegen GoTrue v2.197.0
 
 ### 8.1 Aufgebauter Stack
 
-| Baustein | Umsetzung |
-| --- | --- |
+| Baustein   | Umsetzung                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------ |
 | PostgreSQL | portable PostgreSQL 18.6.1 (`@embedded-postgres/linux-x64`), Port 55432, `initdb -A trust` |
-| GoTrue | Supabase-GoTrue-Binary v2.197.0 (`/tmp/gt/auth`), `migrate` + `serve`, Port 9999 |
-| DB-Schema | GoTrue-Migrationen 75/75, Repo-Migrationen 001–003 + Seed |
-| Frontend | `next build` + `next start` (Next 16.4.3), `NEXT_PUBLIC_AUTH_MOCK=false` |
-| Mail | lokaler SMTP-Sink auf 127.0.0.1:2525, Ablage in `/tmp/ezstack/mail/*.eml` |
+| GoTrue     | Supabase-GoTrue-Binary v2.197.0 (`/tmp/gt/auth`), `migrate` + `serve`, Port 9999           |
+| DB-Schema  | GoTrue-Migrationen 75/75, Repo-Migrationen 001–003 + Seed                                  |
+| Frontend   | `next build` + `next start` (Next 16.4.3), `NEXT_PUBLIC_AUTH_MOCK=false`                   |
+| Mail       | lokaler SMTP-Sink auf 127.0.0.1:2525, Ablage in `/tmp/ezstack/mail/*.eml`                  |
 
 Wichtige Umgebungs-Notiz: GoTrue legt seine Tabellen nur dann in `auth.*` ab, wenn die DB-URL `search_path=auth` setzt. Beim ersten Lauf landeten sie in `public.*` (deshalb `relation "identities" does not exist`). Nach `?search_path=auth` + vorab angelegtem Schema `auth` liefen alle 75 Migrationen sauber. Das ist eine Harness-Einstellung, kein Repo-Defekt.
 
@@ -483,3 +483,269 @@ Damit ist belegt:
 ### 8.4 Urteil T2.1
 
 **bestanden** im Sinne des Akzeptanzkriteriums: Register, Login, Logout, geschützte Route und Passwort-Reset sind gegen den echten GoTrue-Stack mit echtem Output nachgewiesen; die erwarteten Abweichungen sind dokumentiert. **Offen bleibt** der `profiles`-Insert bei Registrierung (Befund 1) — als Folgekarte zu behandeln, kein Blocker für diesen Nachweis.
+
+---
+
+## 9. QA-Abnahme Welle 2 (T2.1–T2.8)
+
+- **Grundlage:** `PLAN.md` §5 (T2.1–T2.8), Anhang A.1/A.2 (A-1…A-8), `docs/HANDOFF.md`.
+- **Geprüfter Stand:** `master` @ `12eecc7` (Arbeitsbaum sauber; letzter Commit „Listen-UI … T2.6“).
+- **Umgebung:** Sandbox ohne Docker-Daemon. PostgreSQL 16.2 (Unix-Socket `/tmp:55432`), GoTrue v2.197.0 (`/tmp/gt/auth`), Repo-Migrationen 001–006 + Seed. Für den Real-Backend-Lauf: GoTrue mit neu erzeugtem JWT-Secret gegen die vorhandene `auth`-DB gestartet, Web-App aus `12eecc7` mit `NEXT_PUBLIC_AUTH_MOCK=false`, `NEXT_PUBLIC_SUPABASE_URL=http://localhost:8000`, gebaut und über den vorhandenen Python-Proxy (8000 → Next 8001, `/auth/v1` → GoTrue 9999) ausgeliefert. Kein Produktivcode geändert; nur diese Datei ergänzt.
+
+### 9.1 Prüfumfang
+
+| #   | Kriterium                                                               | Geprüft                                                     |
+| --- | ----------------------------------------------------------------------- | ----------------------------------------------------------- |
+| A-1 | Auth: Playwright Register→Login→Logout, geschützte Route                | ja (Mock- und Real-Backend-Lauf)                            |
+| A-2 | Haushalt + Liste: zwei Browser-Kontexte, DB-Assertion für Nichtmitglied | ja (Code-/Testbestand; kein E2E vorhanden)                  |
+| A-3 | Einladung: einlösen, Rolle, abgelaufener/widerrufener Link              | ja (Mock-E2E + pgTAP)                                       |
+| A-4 | Mitgliederverwaltung: Rolle, Entfernen, letzter Owner                   | ja (Mock-E2E + pgTAP)                                       |
+| A-5 | Offline-Sync: Konflikte, Edit-vs-Delete, doppeltes Replay               | ja (Vitest)                                                 |
+| A-6 | Listen-UI: Zwei Kontexte <2 s, abgehakte unten, Undo                    | ja (Mock- und Real-Lauf; Latenz-Assertion nicht ausgeführt) |
+| A-7 | Auto-Kategorisierung + Lernen aus Korrektur                             | ja (Unit-Tests + Integration in `apps/web`)                 |
+| A-8 | Duplikat-Zusammenfassung + Hinweis, verschiedene Dimensionen            | ja (Unit-Tests + Integration in `apps/web`)                 |
+
+### 9.2 Durchgeführte Tests mit echtem Output
+
+#### (1) Qualitätsgates `lint`, `typecheck`, `test`
+
+```text
+$ pnpm lint
+> eslint . && prettier --check "**/*.{js,mjs,cjs,ts,mts,cts,json,yml,yaml}"
+Checking formatting...
+All matched files use Prettier code style!
+LINT_EXIT=0
+
+$ pnpm typecheck
+> pnpm --filter @einkaufszettel/core build && tsc --noEmit -p tsconfig.json && pnpm -r --if-present typecheck
+...
+apps/web typecheck: Done
+TC_EXIT=0
+
+$ pnpm test
+ ✓ apps/web/lib/db/repository.test.ts (9 tests)
+ ✓ apps/web/lib/household/token.test.ts (6 tests)
+ ✓ apps/web/lib/sync/worker.test.ts (5 tests)
+ ✓ packages/core/src/outbox.test.ts (12 tests)
+ ✓ packages/core/src/categorize.test.ts (16 tests)
+ ✓ packages/core/src/sync.test.ts (13 tests)
+ ✓ packages/core/src/units.test.ts (9 tests)
+ ✓ packages/core/src/duplicate-summary.test.ts (20 tests)
+ ✓ apps/web/lib/household/mock-store.test.ts (13 tests)
+ ✓ packages/core/src/add-to-list.test.ts (16 tests)
+ ✓ packages/core/src/conflict.test.ts (13 tests)
+ ✓ apps/web/lib/sync/status.test.ts (8 tests)
+ ✓ apps/web/lib/auth/session.test.ts (5 tests)
+ ✓ apps/web/lib/auth/validation.test.ts (8 tests)
+ ✓ tooling/smoke.test.ts (1 test)
+ Test Files  15 passed (15)
+      Tests  154 passed (154)
+
+stdout | packages/core/src/categorize.test.ts > Auto-Kategorisierung (T2.7 / A-7) > erreicht ≥85 % Trefferquote auf dem Seed-Testset (≥50 Artikel)
+Kategorisierung Trefferquote: 101/104 = 97.1 %
+```
+
+Ergebnis: alle drei Gates **exit 0**; Trefferquote **97,1 %** (101/104, Seed-Testset 104 Artikel) wird im Test-Log ausgegeben. A-5, A-7 (Unit-Ebene) und A-8 (Unit-Ebene) sind damit auf Logikebene grün.
+
+#### (2) pgTAP-Suiten (frische Wegwerf-DB, Migrationen 001–006 + Seed)
+
+```text
+$ PGROOT=/opt/data/profiles/backend/cache/scratch/pg PGHOST=/tmp PGPORT=55432 PGUSER=postgres bash supabase/tests/run_local_verify.sh
+=== 6. pgTAP 01_rls ===       1..45   --> exit=0
+=== 7. pgTAP 02_rpc_household_lists ===  1..62   --> exit=0
+=== 8. pgTAP 03_invites_and_members ===  1..77   --> exit=0
+=== 9. Ergebnis ===
+ALLE TESTS GRUEN
+PGTAP_EXIT=0
+```
+
+Belege für die relevanten Fälle (Auszug aus `/opt/data/tmp-qa/pgtap_run.log`):
+
+```text
+ok 31 - Nichtmitglied sieht H1 nicht
+ok 32 - Nichtmitglied sieht L1 nicht
+ok 33 - Nichtmitglied sieht I1 nicht
+ok 34 - Nichtmitglied darf keine Items anlegen
+ok 18 - Owner darf Mitglieder anlegen
+ok 19 - Owner darf Mitgliederrollen aendern
+ok 25 - Editor darf den Haushalt nicht aendern (nur Owner)
+ok 26 - Editor sieht keine Invite-Tokens (nur Owner)
+ok 12 - Replay von create_invite ist erlaubt (idempotent)
+ok 13 - Replay erzeugt keine zweite Einladung
+ok 14 - Einladung 1 traegt die gewaehlte Rolle editor
+ok 25 - B loest Einladung 1 ein und erhaelt die Rolle editor
+ok 73 - Owner D befoerdert Editor E zum Owner
+ok 74 - Owner D stuft sich selbst herab (zweiter Owner vorhanden)
+ok 75 - households.owner_id zeigt nach der Selbst-Herabstufung auf E
+ok 76 - Herabgestufter D darf keine Rollen mehr aendern
+ok 77 - Befoerdeter E als letzter Owner kann nicht austreten
+```
+
+**184/184 pgTAP-Tests grün**, keine `not ok`, keine `# Failed test`. Damit sind RLS, Invite-Ablauf/-Widerruf (Backend), Rollenwirkung und „letzter Owner“ auf DB-Ebene belegt (A-3, A-4).
+
+#### (3) Playwright-E2E im Mock-Modus (`pnpm test:e2e`, CI-Modus)
+
+```text
+4 failed
+  [chromium] › e2e/auth.spec.ts:20:1 › Register -> Login -> Logout
+  [chromium] › e2e/auth.spec.ts:47:1 › Passwort-Reset (Mock): neues Passwort setzen und anmelden
+  [mobile-chromium] › e2e/auth.spec.ts:20:1 › Register -> Login -> Logout
+  [mobile-chromium] › e2e/auth.spec.ts:47:1 › Passwort-Reset (Mock): neues Passwort setzen und anmelden
+2 skipped
+8 passed (1.9m)
+Exit status 1
+```
+
+Ursachen aus den Error-Contexts:
+
+```text
+auth-Register---Login---Logout:
+  expect(locator).toBeVisible() failed
+  Locator: getByRole('heading', { name: 'Einkaufslisten' })
+  Error: element(s) not found
+  # Die tatsächliche UI zeigt seit T2.6: heading "Einkaufsliste" (Singular)
+
+auth-Passwort-Reset:
+  expect(locator).toBeVisible() failed
+  Locator: getByText('e2e-…@example.com')
+  # Die neue Listen-UI zeigt die E-Mail-Adresse nicht mehr im Header
+```
+
+Ergebnis: **CI-E2E-Suite ist am HEAD rot.** Ursache ist kein Auth-Defekt, sondern veraltete Selektoren/Erwartungen nach der T2.6-UI-Änderung (Singular „Einkaufsliste“, E-Mail nicht mehr sichtbar). A-3/A-4-E2E (household.spec) und der Listen-UI-Test „Artikel hinzufügen/abhaken/löschen/Undo“ sind in beiden Projekten **grün**.
+
+#### (4) Playwright-E2E gegen echtes GoTrue/Next-Backend
+
+```text
+$ E2E_PORT=8000 NEXT_PUBLIC_SUPABASE_URL=http://localhost:8000 playwright test --project=chromium
+✓  1 [chromium] › e2e/auth.spec.ts:14:1 › geschuetzte Route ohne Session leitet auf /login (693ms)
+✘  2 [chromium] › e2e/auth.spec.ts:20:1 › Register -> Login -> Logout (17.1s)
+✘  3 [chromium] › e2e/auth.spec.ts:47:1 › Passwort-Reset (Mock): neues Passwort setzen und anmelden (1.0m)
+✘  4 [chromium] › e2e/household.spec.ts:66:1 › A-3/A-4: Einladung einloesen, Rolle wirkt sofort, Entfernen entzieht Zugriff, letzter Owner geschuetzt (17.6s)
+✘  5 [chromium] › e2e/household.spec.ts:146:1 › A-3: abgelaufener und widerrufener Link werden mit unterscheidbarer Meldung abgelehnt (17.7s)
+✓  6 [chromium] › e2e/list-ui.spec.ts:35:3 › Listen-UI (T2.6) › Artikel hinzufuegen, abhaken, loeschen und Undo (2.5s)
+✘  7 [chromium] › e2e/list-ui.spec.ts:66:3 › Listen-UI (T2.6) › Zwei Browser-Kontexte: Aenderung in <2s beim anderen (nur mit echtem Backend) (17.6s)
+5 failed
+2 passed (2.3m)
+```
+
+Wichtige Einordnung der Fehler:
+
+- **Auth Register→Login→Logout:** Die Seite ist nach der Registrierung/Anmeldung tatsächlich eingeloggt — der Error-Context zeigt `heading "Einkaufsliste"`, `Sync-Status: Synchronisiert`, `Abmelden`. Der Test scheitert nur am veralteten Selektor `Einkaufslisten`. **Die reale Auth-Funktion funktioniert**, der Test ist stale (D8.1).
+- **Haushalt A-3/A-4 und A-3-Ablauf:** Der `createHousehold`-Aufruf scheitert; die UI zeigt als Alert den HTML-Body einer Next-404-Seite. Ursache: Der Sandbox-Stack hat **kein PostgREST**; `supabase-js` ruft `/rest/v1/...` auf, der Proxy leitet das an Next (8001) weiter, Next antwortet mit 404-HTML. Das ist eine **Harness-Grenze**, kein App-Defekt — auf einem echten Supabase-Stack (PostgREST vorhanden) wäre der Pfad vorhanden. Der Nachweis für A-3/A-4-real bleibt in dieser Umgebung offen.
+- **Zwei-Browser-Kontexte (A-6):** Der Test registriert in beiden Kontexten **dieselbe E-Mail**. Im Real-Backend antwortet GoTrue beim zweiten Mal korrekt mit „Für diese E-Mail-Adresse existiert bereits ein Konto.“; der Test bleibt auf `/register` und schlägt fehl. Damit ist der Test für ein echtes Backend **fehlerhaft konstruiert** (zweiter Kontext müsste einloggen statt registrieren) und die Latenz-Assertion wird nie erreicht (D8.3).
+- **Passwort-Reset (Mock):** Der Test ist ausdrücklich Mock-only, wird aber im Real-Lauf mit ausgeführt und scheitert an der fehlenden Mock-Route/Erwartung. Test-Hygiene (D8.6).
+
+### 9.3 Befunde / Defekte
+
+#### D8.1 — [hoch] CI-E2E-Suite nach T2.6-UI-Änderung rot (A-1, A-6)
+
+- **Ist:** `pnpm test:e2e` (Mock-Modus, wie in `.github/workflows/e2e.yml`) endet mit **4 failed / 8 passed / 2 skipped**, Exit 1. `auth.spec.ts` erwartet Überschrift `Einkaufslisten` und die E-Mail-Adresse im Listen-Header; die T2.6-UI rendert `Einkaufsliste` (Singular) und zeigt die E-Mail nicht mehr. Der Workflow läuft auf jedem Push auf `master`; damit ist die Pipeline am HEAD rot. A-1 verlangt ausdrücklich „Playwright-Test grün in CI“.
+- **Soll:** `pnpm test:e2e` grün; Selektoren an die aktuelle UI angepasst (Singular, E-Mail-Assertion entfernen oder an eine Stelle legen, wo die E-Mail noch sichtbar ist).
+- **Reproduktion:** `pnpm test:e2e` → 4 failed; Error-Context `test-results/auth-Register---Login---Logout-chromium/error-context.md`.
+- **Hinweis:** Die Auth-Funktion selbst ist nicht defekt — im Real-Lauf ist die Seite nach Login korrekt eingeloggt. Es ist ein Test-Wartungsdefekt mit CI-Blocker-Wirkung.
+
+#### D8.2 — [hoch] A-7/A-8-Kernlogik ist nicht in die Web-App verdrahtet
+
+- **Ist:** `categorize`, `learnFromManualChange`, `summarizeDuplicate`/`aggregateListRows` existieren in `packages/core` und sind durch Unit-Tests abgedeckt. In `apps/web` werden sie **nicht verwendet**:
+  - `grep -rn "categorize\|learnFromManualChange" apps/web` → **keine Treffer** (nur `CATEGORY_KEYS`/`CATEGORY_LABELS`-Importe für Labels).
+  - `handleAddItem` in `apps/web/app/lists/page.tsx` ruft `createItemLocal` nur mit `list_id` und `name` auf; `createItemLocal` setzt `category_id: input.category_id ?? null` (`apps/web/lib/db/repository.ts:196`). Neue Artikel werden also **nicht automatisch kategorisiert** und landen über den Fallback in „sonstiges“.
+  - Die Detailseite (`apps/web/app/list/[itemId]/page.tsx`) schreibt bei einer Kategorie-Korrektur nur `category_id`; ein Aufruf von `learnFromManualChange` ist nicht vorhanden. Es entsteht **keine Haushaltsregel**.
+  - `ListItemRow.tsx` rendert nur `name` und `quantity`; eine Duplikat-Zusammenfassung/ein Hinweis wird nicht berechnet oder angezeigt. `createItemLocal` prüft vor dem Insert keine Duplikate.
+- **Soll:** Beim Hinzufügen `categorize`/Duplikatprüfung verwenden und bei manueller Kategorieänderung `learnFromManualChange` aufrufen; die UI muss den Hinweis („Menge addiert“, „eigene Zeile wegen anderer Dimension“) anzeigen. A-8 verlangt zusätzlich eine **UI-Assertion im E2E**.
+- **Reproduktion:** In der Listen-UI „Milch“ zweimal hinzufügen → zwei Zeilen, kein Hinweis, keine Mengenaddition; neue Artikel haben keine Kategorie. Code-Referenzen s. o.
+- **Folge:** Die Checkboxen T2.7/T2.8 in `PLAN.md` sind verfrüht abgehakt; die Features sind im Produkt nicht nutzbar, obwohl die Core-Logik getestet ist.
+
+#### D8.3 — [hoch] A-6-Latenz-Assertion wird in CI nie ausgeführt; Real-Test fehlerhaft
+
+- **Ist:** `list-ui.spec.ts` überspringt den Zwei-Kontext-Test ohne `NEXT_PUBLIC_SUPABASE_URL`; der CI-Workflow startet die App mit `NEXT_PUBLIC_AUTH_MOCK=true` und ohne Supabase-URL → **2 skipped** in jedem Lauf. Es gibt damit **keinen** CI-Nachweis für „Änderung erscheint in <2 s“. Im Real-Lauf scheitert der Test vor der Messung, weil beide Kontexte dieselbe E-Mail registrieren (GoTrue: „Für diese E-Mail-Adresse existiert bereits ein Konto“). Die vorhandene `expect(...).toBeVisible({ timeout: 2000 })`-Assertion wird nie erreicht.
+- **Soll:** Eigener E2E-Real-Job (echtes Supabase) mit zwei Kontexten/Usern (oder Login statt Zweit-Registrierung) und tatsächlich gemessener Latenz; Ergebnis im CI-Log.
+- **Reproduktion:** `E2E_PORT=8000 NEXT_PUBLIC_SUPABASE_URL=http://localhost:8000 playwright test --project=chromium` → `list-ui.spec.ts:66:3` failed, Alert „Für diese E-Mail-Adresse existiert bereits ein Konto.“; Mock-Lauf → „2 skipped“.
+
+#### D8.4 — [mittel] A-2 hat keinen E2E-Test mit zwei Browser-Kontexten
+
+- **Ist:** In `apps/web/e2e` existiert kein A-2-Test (kein Treffer für „A-2“/„fremd“). Die Nichtmitglied-Sicht ist nur durch pgTAP belegt (`ok 31–34`, `ok 46–52`), nicht durch einen Playwright-Test mit zwei Kontexten und DB-Assertion auf 0 sichtbare Zeilen für B. Anhang A.2 verlangt genau diesen Nachweis.
+- **Soll:** Playwright-Test: A legt Haushalt + Liste an; B (nicht Mitglied) sieht in Listen-/Detailansicht keine Zeilen; zusätzlich DB-Assertion (z. B. Service-Role-Count = 0 für B).
+- **Reproduktion:** `grep -rn "A-2" apps/web/e2e` → keine Treffer.
+
+#### D8.5 — [mittel, Umgebung] Real-Backend-Harness ohne PostgREST
+
+- **Ist:** Der vorhandene Sandbox-Stack besteht aus PostgreSQL + GoTrue + Next + Python-Proxy; **PostgREST fehlt**. `supabase-js`-REST-Aufrufe (`/rest/v1/...`) landen bei Next und liefern 404-HTML; die UI zeigt dieses HTML als Fehlermeldung. Deshalb scheitern `household.spec.ts` (A-3/A-4) im Real-Lauf, obwohl Mock-E2E und pgTAP grün sind.
+- **Soll:** Real-E2E gegen vollständigen Supabase-Stack (PostgREST, ggf. Realtime) oder gegen die Compose-Umgebung; dann A-2/A-3/A-4/A-6 real nachweisen.
+- **Einordnung:** Kein App-Defekt, sondern eine Harness-Grenze der Sandbox (kein Docker). Auf einem echten Supabase-Stack sind die RPC-/REST-Pfade vorhanden. Der Nachweis bleibt offen.
+
+#### D8.6 — [niedrig] Test-Hygiene Passwort-Reset / Profile-Insert
+
+- **Ist:** Der Passwort-Reset-Test ist als „(Mock)“ markiert, wird aber im Real-Lauf mit ausgeführt und scheitert dort an der fehlenden Mock-Route. Zudem wird bei Registrierung weiterhin **keine** `profiles`-Zeile angelegt (bereits Befund 1 in §8.3); `ensureProfile()` läuft erst in `createHousehold()`. Für A-2/A-3 ist das kein Blocker (Create-Pfad upsertet), aber der Registrierungs-Flow bleibt inkonsistent.
+- **Soll:** Mock-Test per `test.skip(!isMockAuth)` ausschließen; Profil-Insert beim Signup (Trigger auf `auth.users` oder Aufruf im Auth-Flow) nachziehen.
+
+### 9.4 Urteil je Kriterium
+
+| #       | Urteil                               | Begründung (knapp)                                                                                                                                                                                              |
+| ------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A-1** | **nicht bestanden**                  | Playwright-Suite am HEAD rot (`pnpm test:e2e`: 4 failed/8 passed/2 skipped). Funktionale Auth ist real nachgewiesen, aber das AK verlangt „Playwright-Test grün in CI“; D8.1.                                   |
+| **A-2** | **nicht bestanden**                  | Kein E2E-Test mit zwei Browser-Kontexten + DB-Assertion; nur pgTAP-RLS. D8.4.                                                                                                                                   |
+| **A-3** | **bestanden (Mock/pgTAP)**           | Mock-E2E deckt Einlösen/Rolle sowie abgelaufenen/widerrufenen Link ab (beide Tests grün); pgTAP bestätigt Invite-Replay/Rolle/Ablauf. Real-Backend-E2E offen wegen D8.5.                                        |
+| **A-4** | **bestanden (Mock/pgTAP)**           | Mock-E2E: Rolle wirkt sofort, Entfernen entzieht Zugriff, letzter Owner geschützt (grün); pgTAP `ok 73–77`. Real-Backend-E2E offen wegen D8.5.                                                                  |
+| **A-5** | **bestanden**                        | 154 Vitest-Tests grün, inkl. Konfliktfälle (gleichzeitiges Abhaken, Edit-vs-Delete) und doppeltes Outbox-Replay ohne Duplikat.                                                                                  |
+| **A-6** | **nicht bestanden**                  | UI-Sortierung/Undo ist grün, aber die geforderte Zwei-Kontext-Latenz-Assertion wird in CI übersprungen und im Real-Lauf vor der Messung durch den Doppel-Registrierungsfehler abgebrochen; D8.3.                |
+| **A-7** | **nicht bestanden (Integration)**    | Unit-Tests + Trefferquote 97,1 % grün, aber `categorize`/`learnFromManualChange` sind in `apps/web` nicht verdrahtet: neue Artikel werden nicht kategorisiert, Korrekturen erzeugen keine Haushaltsregel. D8.2. |
+| **A-8** | **nicht bestanden (Integration/UI)** | Unit-Tests grün, aber keine Duplikat-Zusammenfassung im Add-Flow und kein Hinweis in der UI; die geforderte UI-Assertion fehlt. D8.2.                                                                           |
+
+### 9.4b Urteil je T2.x (Plan-AKs)
+
+| T2.x     | Urteil                            | Begründung (knapp)                                                                                                                     |
+| -------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **T2.1** | **nicht bestanden**               | AK „E2E-Test Register→Login→Logout“: Suite am HEAD rot (D8.1); die Funktion selbst ist real nachgewiesen, der Test ist stale.          |
+| **T2.2** | **nicht bestanden**               | Checkbox in `PLAN.md` noch offen; kein E2E-Nachweis „zweiter Nutzer sieht fremde Haushalte nicht“ (nur pgTAP-DB-Sicht, D8.4).          |
+| **T2.3** | **bestanden (Mock/pgTAP)**        | Einlösen, Rollenwahl, Ablauf/Widerruf in Mock-E2E und pgTAP grün; Real-Backend-E2E offen (D8.5).                                       |
+| **T2.4** | **bestanden (Mock/pgTAP)**        | Rollenwechsel, Entfernen, „letzter Owner“ in Mock-E2E und pgTAP `ok 73–77` grün; Real-Backend-E2E offen (D8.5).                        |
+| **T2.5** | **bestanden**                     | 154 Vitest-Tests inkl. Konfliktfälle (gleichzeitig Abhaken, Edit-vs-Delete, doppeltes Outbox-Replay) grün.                             |
+| **T2.6** | **nicht bestanden**               | UI/Undo grün, aber der AK „Änderung in <2 s beim anderen“ wird in CI übersprungen und im Real-Lauf vor der Messung abgebrochen (D8.3). |
+| **T2.7** | **nicht bestanden (Integration)** | Unit-Tests + 97,1 % Trefferquote grün, aber `categorize`/`learnFromManualChange` sind in der Web-App nicht verdrahtet (D8.2).          |
+| **T2.8** | **nicht bestanden (Integration)** | Unit-Tests grün, aber keine Duplikat-Zusammenfassung/Hinweis im Add-Flow der UI (D8.2).                                                |
+
+### 9.5 Fazit Welle 2
+
+**Nicht bestanden.** Die Backend-/Core-Logik ist weitgehend solide (184/184 pgTAP, 154/154 Vitest, Trefferquote 97,1 %), aber die **Abnahmekriterien der Welle 2 sind nicht erfüllt**:
+
+- Die **CI-E2E-Suite ist rot** (A-1; D8.1) — Release-Blocker, auch wenn die Auth-Funktion real funktioniert.
+- **A-2** hat den geforderten Zwei-Kontext-E2E-Nachweis nicht (D8.4).
+- **A-6** hat keine in CI ausgeführte Latenz-Assertion (D8.3).
+- **A-7/A-8** sind nur als Core-Logik + Unit-Tests vorhanden, aber **nicht in der App verdrahtet** (D8.2) — die geplanten Features sind für Nutzer nicht wirksam.
+
+**Empfohlene Folgekarten (kein Produktivcode in dieser QA-Runde geändert):**
+
+1. E2E-Selektoren nach T2.6 aktualisieren (`Einkaufsliste` statt `Einkaufslisten`, E-Mail-Assertion entfernen/verschieben); CI wieder grün machen. (D8.1)
+2. `categorize` beim Anlegen und `learnFromManualChange` bei Kategorie-Korrektur in `apps/web` aufrufen; Duplikatprüfung/`summarizeDuplicate` im Add-Flow + Hinweis rendern; E2E-UI-Assertion ergänzen. (D8.2)
+3. A-2-Zwei-Kontext-E2E mit DB-Assertion ergänzen. (D8.4)
+4. Real-Backend-E2E-Job (Supabase/PostgREST) für A-3/A-4/A-6; Cross-Kontext-Test mit zwei Usern/Login statt Doppel-Registrierung. (D8.3/D8.5)
+5. `profiles`-Insert beim Signup nachziehen; Mock-only-Test korrekt skippen. (D8.6)
+
+### 9.6 Gate-2-Checkliste (manuelle Handy-Abnahme, zwei Geräte)
+
+**Voraussetzung:** vollständiger Supabase-Stack (PostgREST + GoTrue + Realtime) bzw. Compose-Umgebung; die Sandbox hier hat kein PostgREST (D8.5). Die Checkliste ist für die manuelle Abnahme am Handy gedacht; „automatisiert“ heißt, dass dafür bereits ein grüner Test vorliegt, „offen“ heißt: manuell prüfen, weil kein automatisierter Nachweis existiert oder er am HEAD rot ist.
+
+| #     | Prüfpunkt (AK)                                | Vorgehen auf dem Handy                                                                 | Erwartung                                                                                                                             | Automatisiert?                                    | Status / Hinweis                                                                |
+| ----- | --------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------- |
+| G2-1  | Registrierung → Login → Logout (A-1)          | Auf Gerät A registrieren, anmelden, abmelden                                           | Nach Registrierung `/login?registered=1`; Login landet auf `/lists`; Logout führt zu `/login`; kein Zugriff auf `/lists` ohne Session | ja (Mock/real), aber Suite rot                    | **offen** – D8.1: Selektoren stale; Funktion real ok                            |
+| G2-2  | Passwort-Reset (A-1)                          | „Passwort vergessen“ auf Gerät A, Link in Mail öffnen                                  | Reset-Formular, neues Passwort setzen, danach Login                                                                                   | ja (Mock)                                         | **offen** – Link enthält kein `email`; E-Mail manuell eintippen (§8.3 Befund 2) |
+| G2-3  | Geschützte Route (A-1)                        | `/lists` ohne Login aufrufen                                                           | Redirect `/login?next=%2Flists`                                                                                                       | ja (Mock/real grün)                               | **bestanden**                                                                   |
+| G2-4  | Haushalt + Standardliste anlegen (T2.2)       | Auf Gerät A Haushalt anlegen                                                           | Haushalt + Standardliste existieren; A sieht sie                                                                                      | teilweise (pgTAP)                                 | **offen** – kein E2E; realer Stack nötig (D8.5)                                 |
+| G2-5  | Zweites Gerät als Nichtmitglied (A-2)         | Auf Gerät B (anderer Account) anmelden, bevor Einladung angenommen                     | B sieht den Haushalt/die Liste von A **nicht** (leerer Zustand, keine Items); DB-Count für B = 0                                      | nur pgTAP (`ok 31–34`)                            | **offen** – D8.4: E2E mit zwei Kontexten + DB-Assertion fehlt                   |
+| G2-6  | Einladung via Link/QR einlösen (A-3)          | A erstellt Einladung mit Rolle „Editor“, B scannt QR/öffnet Link und löst ein          | B tritt bei, Rolle „Editor“ wirkt sofort; B sieht Liste                                                                               | ja (Mock/pgTAP)                                   | **offen real** – D8.5; Mock grün                                                |
+| G2-7  | Abgelaufener/widerrufener Link (A-3)          | Abgelaufenen Link und widerrufenen Link auf B öffnen                                   | Zwei **unterscheidbare** Meldungen; kein Beitritt                                                                                     | ja (Mock)                                         | **bestanden (Mock)**; realer Lauf offen (D8.5)                                  |
+| G2-8  | Rolle ändern wirkt sofort (A-4)               | A ändert B von „Editor“ auf „Viewer“; B aktualisiert                                   | B kann keine Artikel mehr anlegen/ändern; UI zeigt Rolle                                                                              | ja (Mock/pgTAP)                                   | **bestanden (Mock)**; realer Lauf offen                                         |
+| G2-9  | Mitglied entfernen entzieht Zugriff (A-4)     | A entfernt B; B öffnet Liste erneut                                                    | B verliert Zugriff (Liste/Haushalt nicht mehr sichtbar)                                                                               | ja (Mock/pgTAP)                                   | **bestanden (Mock)**; realer Lauf offen                                         |
+| G2-10 | Letzter Owner kann nicht austreten (A-4)      | Einziger Owner tippt „Haushalt verlassen“                                              | Abbruch mit verständlicher P0001-Meldung; Owner bleibt                                                                                | ja (Mock/pgTAP `ok 77`)                           | **bestanden (Mock)**                                                            |
+| G2-11 | Offline: Hinzufügen/Abhaken/Löschen (A-5)     | Gerät A in Flugmodus: Artikel hinzufügen, abhaken, löschen; App neu laden              | Alle Aktionen lokal sichtbar; Sync-Status „ausstehend“; keine Datenverluste                                                           | ja (Vitest)                                       | **bestanden (Logik)**; manuell auf Gerät bestätigen                             |
+| G2-12 | Reconnect: Outbox vollständig abspielen (A-5) | Flugmodus aus; warten                                                                  | Outbox leert sich; keine Duplikate; Status „Synchronisiert“                                                                           | ja (Vitest)                                       | **bestanden (Logik)**; manuell bestätigen                                       |
+| G2-13 | Konflikt: gleichzeitiges Abhaken (A-5)        | A und B beide offline denselben Artikel abhaken; beide online bringen                  | Eindeutiger Gewinner, kein Duplikat, kein Datenverlust                                                                                | ja (Vitest)                                       | **bestanden (Logik)**; manuell bestätigen                                       |
+| G2-14 | Konflikt: Edit vs. Delete (A-5)               | A bearbeitet offline, B löscht offline; beide synchronisieren                          | Löschung gewinnt (Tombstone), kein Wiederauferstehen                                                                                  | ja (Vitest)                                       | **bestanden (Logik)**; manuell bestätigen                                       |
+| G2-15 | Realtime <2 s (A-6)                           | A und B geöffnet; A fügt Artikel hinzu; Stoppuhr                                       | Artikel erscheint bei B in **<2 s** ohne Reload                                                                                       | **nein** (CI überspringt; realer Test fehlerhaft) | **offen** – D8.3; Release-Blocker für A-6                                       |
+| G2-16 | Abgehakte unten + Undo (A-6)                  | Artikel abhaken; löschen; „Rückgängig“ tippen                                          | Abgehakte unter „Erledigt (n)“; Undo stellt Artikel wieder her                                                                        | ja (Mock-E2E)                                     | **bestanden (UI)**                                                              |
+| G2-17 | Auto-Kategorisierung (A-7)                    | „Milch“, „Brot“, „Tomate“ hinzufügen                                                   | Einsortierung in Milchprodukte/Backwaren/Obst & Gemüse                                                                                | nein (UI nicht verdrahtet)                        | **blockiert** – D8.2; derzeit alles „sonstiges“                                 |
+| G2-18 | Lernen aus Korrektur (A-7)                    | Kategorie von „Milch“ manuell auf „Sonstiges“ ändern; danach erneut „Milch“ hinzufügen | Neue „Milch“ wird der gelernten Haushaltsregel „Sonstiges“ zugeordnet                                                                 | nein (UI nicht verdrahtet)                        | **blockiert** – D8.2; keine Haushaltsregel wird erzeugt                         |
+| G2-19 | Duplikat gleiche Dimension (A-8)              | „Milch 1 l“ zweimal hinzufügen                                                         | Eine Zeile „Milch 2 l“ + Hinweis „Menge addiert“                                                                                      | nein (UI nicht verdrahtet)                        | **blockiert** – D8.2; zwei Zeilen ohne Hinweis                                  |
+| G2-20 | Duplikat unterschiedliche Dimension (A-8)     | „Milch 1 l“ und „Milch 2 Stück“ hinzufügen                                             | Getrennte Zeilen; Hinweis „eigene Zeile (andere Dimension)“                                                                           | nein (UI nicht verdrahtet)                        | **blockiert** – D8.2; keine Dimension-Erkennung in der UI                       |
+
+**Kurzfassung für die Handy-Abnahme:** G2-3, G2-7…G2-14, G2-16 sind automatisiert bzw. logisch abgesichert; G2-1/G2-2 sind manuell zu prüfen (Test rot, Funktion ok); G2-4/G2-5/G2-6/G2-8/G2-9/G2-10 brauchen den vollständigen Supabase-Stack; **G2-15 (Realtime <2 s), G2-17…G2-20 (Auto-Kategorisierung/Lernen/Duplikate) sind derzeit blockiert** und dürfen nicht als „bestanden“ abgehakt werden. Die manuelle Handy-Abnahme sollte erst nach Behebung von D8.1/D8.2/D8.3 und mit echtem Supabase-Stack erfolgen.
