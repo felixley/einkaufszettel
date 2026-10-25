@@ -4,23 +4,40 @@ import { join } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * In manchen Sandboxes zeigt PLAYWRIGHT_BROWSERS_PATH auf ein leeres,
- * schreibgeschuetztes Verzeichnis. Dann auf den Benutzer-Cache ausweichen,
- * in dem `playwright install chromium` die Browser ablegt.
+ * Sandbox-Guard: zeigt `PLAYWRIGHT_BROWSERS_PATH` auf ein Verzeichnis mit einer
+ * *anderen* Chromium-Revision, findet Playwright den erwarteten Browser nicht.
+ * Die Env-Variable laesst sich hier nicht nachtraeglich umbiegen (Playwright
+ * cached den Pfad beim ersten Zugriff), deshalb suchen wir die Binary selbst
+ * und setzen sie explizit als `executablePath`. Auf CI/Dev-Rechnern mit
+ * korrekt installierten Browsern findet die Suche nichts und Playwright bleibt
+ * beim Standardverhalten.
  */
-const configuredBrowsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH;
-if (configuredBrowsersPath) {
-  try {
-    const hasChromium = existsSync(configuredBrowsersPath)
-      ? readdirSync(configuredBrowsersPath).some((name) => name.startsWith('chromium-'))
-      : false;
-    if (!hasChromium) {
-      process.env.PLAYWRIGHT_BROWSERS_PATH = join(homedir(), '.cache', 'ms-playwright');
+function resolveChromiumExecutable(): string | undefined {
+  const roots = [
+    process.env.PLAYWRIGHT_BROWSERS_PATH,
+    join(homedir(), '.cache', 'ms-playwright'),
+  ].filter((value): value is string => Boolean(value));
+  const layouts = [
+    {
+      prefix: 'chromium_headless_shell-',
+      relative: join('chrome-headless-shell-linux64', 'chrome-headless-shell'),
+    },
+    { prefix: 'chromium-', relative: join('chrome-linux64', 'chrome') },
+  ];
+  for (const { prefix, relative } of layouts) {
+    for (const root of roots) {
+      if (!existsSync(root)) continue;
+      for (const entry of readdirSync(root)) {
+        if (!entry.startsWith(prefix)) continue;
+        const candidate = join(root, entry, relative);
+        if (existsSync(candidate)) return candidate;
+      }
     }
-  } catch {
-    process.env.PLAYWRIGHT_BROWSERS_PATH = join(homedir(), '.cache', 'ms-playwright');
   }
+  return undefined;
 }
+
+const chromiumExecutablePath = resolveChromiumExecutable();
 
 const PORT = Number(process.env.E2E_PORT ?? 3210);
 // `localhost` statt 127.0.0.1: Next.js blockt Dev-Ressourcen (HMR/Chunks) als
@@ -40,6 +57,9 @@ export default defineConfig({
     baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    ...(chromiumExecutablePath
+      ? { launchOptions: { executablePath: chromiumExecutablePath } }
+      : {}),
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
