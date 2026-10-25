@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r --if-present typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "pnpm --filter @einkaufszettel/web test:e2e",
     "build": "pnpm -r --if-present build",
     "prepare": "husky"
   },

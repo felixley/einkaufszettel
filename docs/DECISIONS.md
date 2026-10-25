@@ -126,3 +126,32 @@ public.categories` → **13**, `category_rules` → **389**; zweiter
   Repos unter
   `/opt/data/profiles/devops/cache/scratch/d3/` (`prelude.sql`,
   `Caddyfile.start`, portable PG-Binaries).
+
+## 2026-10-25 — T2.1 Auth: Adapter-Abstraktion, Mock fuer Dev/E2E, `proxy.ts` statt `middleware.ts`
+
+- **Entscheidung:** `apps/web` bekommt eine duenne Auth-Abstraktion
+  (`lib/auth/`): `AuthAdapter` mit zwei Implementierungen — `SupabaseAuthAdapter`
+  (`@supabase/ssr`, Cookie-Session gegen die Compose-GoTrue) und
+  `MockAuthAdapter` (localStorage-Nutzer, Session im nicht signierten Cookie
+  `ez_mock_session`). Die Auswahl erfolgt ueber `NEXT_PUBLIC_AUTH_MOCK` bzw.
+  automatisch, wenn `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` fehlen. Routenschutz
+  liegt in `apps/web/proxy.ts` (Next.js 16 hat `middleware.ts` in `proxy.ts`
+  umbenannt; Funktion heisst `proxy`).
+- **Begruendung:** In dieser Sandbox laeuft kein Docker-Daemon, damit ist keine
+  GoTrue-Instanz erreichbar. Der Mock erlaubt den geforderten E2E-Nachweis
+  Register→Login→Logout offline und ohne Secrets. Der echte Adapter ist
+  vollstaendig implementiert und wird aktiv, sobald die Env-Variablen gesetzt
+  sind — kein Code-Umbau noetig.
+- **Alternative:** E2E-Tests gegen eine echte, temporaere GoTrue-Instanz
+  (docker compose) oder ein MSW-gemocktes Netzwerk. Verworfen, weil Docker hier
+  fehlt und MSW zusaetzliche Abhaengigkeiten in den Produktions-Bundle-Pfad
+  bringt.
+- **Risiko/Status:** Der Mock ist **keine echte Authentifizierung**: Passwoerter
+  liegen als SHA-256-Hash in `localStorage`, das Session-Cookie ist unsigniert
+  und nur fuer Dev/E2E gedacht. In Produktion muss `NEXT_PUBLIC_AUTH_MOCK`
+  ungesetzt/false sein und eine echte Supabase-URL konfiguriert werden. Das ist
+  im `.env.example` und im Mock-Modul-Kommentar ausdruecklich vermerkt.
+  Weiterhin: E2E-Basisport ist 3210 (3100 war in der Sandbox durch einen
+  verwaisten `next-server` belegt); Browser-Pfad wird in
+  `playwright.config.ts` auf `~/.cache/ms-playwright` korrigiert, falls
+  `PLAYWRIGHT_BROWSERS_PATH` auf ein leeres Verzeichnis zeigt.
