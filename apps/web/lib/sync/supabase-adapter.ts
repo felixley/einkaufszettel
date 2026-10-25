@@ -9,6 +9,7 @@ import type {
   Unit,
 } from '@einkaufszettel/core';
 import { createSupabaseBrowserClient } from '@/lib/auth/supabase';
+import { categoryDbIdToKey, categoryKeyToDbId } from '@/lib/data/category-map';
 
 /** Zeilenform, wie PostgREST sie für `public.list_items` liefert. */
 export interface DbListItemRow {
@@ -58,7 +59,8 @@ export function listItemFromDbRow(row: DbListItemRow): ListItem {
     name_normalized: row.name_normalized,
     quantity: numeric(row.quantity),
     unit: row.unit,
-    category_id: row.category_id,
+    // Server-UUID → UI-Schlüssel, damit die Gruppierung lokal weiter greift.
+    category_id: categoryDbIdToKey(row.category_id),
     checked: row.checked,
     checked_by: row.checked_by,
     source_recipe_id: row.source_recipe_id,
@@ -84,7 +86,8 @@ export function dbRowFromListItem(row: ListItemRowData): Record<string, unknown>
     name_normalized: row.name_normalized,
     quantity: row.quantity,
     unit: row.unit,
-    category_id: row.category_id,
+    // UI-Schlüssel → Server-UUID (FK auf `categories.id`).
+    category_id: categoryKeyToDbId(row.category_id),
     checked: row.checked,
     checked_by: row.checked_by,
     source_recipe_id: row.source_recipe_id,
@@ -112,9 +115,11 @@ export class SupabaseSyncAdapter implements SyncAdapter {
   }
 
   async upsert(table: string, row: ListItemRowData): Promise<void> {
-    const { error } = await this.client
-      .from(table)
-      .upsert(dbRowFromListItem(row), { onConflict: 'id' });
+    // `category_rules` und weitere Tabellen haben ein eigenes Spaltenschema;
+    // nur `list_items` durchläuft die ListItem-Abbildung.
+    const payload =
+      table === 'list_items' ? dbRowFromListItem(row) : (row as unknown as Record<string, unknown>);
+    const { error } = await this.client.from(table).upsert(payload, { onConflict: 'id' });
     if (error) throw toAdapterError(error);
   }
 

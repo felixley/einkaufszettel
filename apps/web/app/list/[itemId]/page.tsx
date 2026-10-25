@@ -2,15 +2,17 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import type { ListItem } from '@einkaufszettel/core';
+import type { CategoryKey, ListItem } from '@einkaufszettel/core';
 import { CATEGORY_KEYS, CATEGORY_LABELS } from '@einkaufszettel/core';
 import { getDb } from '@/lib/db/database';
 import {
   checkItemLocal,
   deleteItemLocal,
   getItem,
+  learnCategoryRuleLocal,
   updateItemLocal,
 } from '@/lib/db/repository';
+import { getHouseholdAdapter } from '@/lib/household';
 import styles from './list-detail.module.css';
 
 const UNITS = [
@@ -48,6 +50,23 @@ export default function ItemDetailPage() {
   const [category, setCategory] = useState('');
   const [note, setNote] = useState('');
   const [checked, setChecked] = useState(false);
+  const [householdId, setHouseholdId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    // Haushalts-ID für gelernte Regeln (best effort, offline tolerant).
+    void getHouseholdAdapter()
+      .getMyHousehold()
+      .then((result) => {
+        if (active && result.ok) setHouseholdId(result.data?.id ?? null);
+      })
+      .catch(() => {
+        /* offline/kein Haushalt: nur globale Regeln, kein Lernen. */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -86,15 +105,38 @@ export default function ItemDetailPage() {
     try {
       const db = getDb();
       const now = new Date().toISOString();
+      const nextCategory = (category === '' ? null : category) as CategoryKey | null;
+      const categoryChanged = (item.fields.category_id ?? null) !== nextCategory;
+
+      // Fallback: Haushalts-ID erst beim Speichern holen, falls der Effekt noch
+      // nicht durch ist (sonst ginge das Lernen der Regel verloren).
+      let currentHouseholdId = householdId;
+      if (currentHouseholdId === null && categoryChanged) {
+        try {
+          const result = await getHouseholdAdapter().getMyHousehold();
+          if (result.ok) currentHouseholdId = result.data?.id ?? null;
+        } catch {
+          /* offline/kein Haushalt: nur globale Regeln. */
+        }
+      }
+
       const patch = {
         name: name.trim(),
         quantity: quantity === '' ? null : Number.parseFloat(quantity),
         unit: (unit === '' ? null : unit) as ListItem['fields']['unit'],
-        category_id: category === '' ? null : category,
+        category_id: nextCategory,
         note: note.trim() === '' ? null : note.trim(),
       };
 
       const updated = await updateItemLocal(db, item.id, patch, now);
+      // Manuelle Kategorie-Korrektur lernt eine Haushaltsregel (T2.7/A-7).
+      if (updated && categoryChanged && nextCategory !== null && currentHouseholdId !== null) {
+        await learnCategoryRuleLocal(
+          db,
+          { articleName: name.trim(), categoryKey: nextCategory, householdId: currentHouseholdId },
+          now,
+        );
+      }
       if (updated && checked !== item.fields.checked) {
         await checkItemLocal(db, item.id, checked, now);
       }

@@ -1,4 +1,4 @@
-import type { FieldTimestamps, ListItemFields, Unit } from '@einkaufszettel/core';
+import type { CategoryKey, FieldTimestamps, ListItemFields, Unit } from '@einkaufszettel/core';
 
 /**
  * Zeilenform der Dexie-Tabelle `list_items`.
@@ -37,6 +37,27 @@ export interface DeadLetterRow {
 export interface MetaRow {
   key: string;
   value: string;
+}
+
+/**
+ * Zeilenform der Dexie-Tabelle `category_rules`.
+ *
+ * `category_key` ist der lokale, sprechende Schlüssel (z. B. `milch_eier`),
+ * `category_id` die stabile Server-UUID für den Outbox-Upsert. Beide werden
+ * gespeichert, damit die UI offline ohne Server-Mapping auskommt und der
+ * Sync-Payload dennoch die FK-Spalte `category_rules.category_id` bedient.
+ *
+ * `household_id === null` markiert eine globale Seed-Regel.
+ */
+export interface LocalCategoryRuleRow {
+  id: string;
+  household_id: string | null;
+  keyword: string;
+  category_key: CategoryKey;
+  category_id: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
 }
 
 /** Eingabe zum Anlegen eines Artikels. Fehlende Felder werden neutral belegt. */

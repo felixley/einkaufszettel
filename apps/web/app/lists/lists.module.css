@@ -178,6 +178,52 @@
   opacity: 0.6;
 }
 
+/* Duplikat-Hinweis über der Add-Leiste (T2.8): sichtbar, aber nicht modaler Block. */
+.addHint {
+  position: fixed;
+  bottom: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 30rem;
+  width: calc(100% - 1.5rem);
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.6rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  z-index: 21;
+}
+
+.addQuantity {
+  width: 5.5rem;
+  min-height: 52px;
+  padding: 0.75rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.addUnit {
+  width: 6.5rem;
+  min-height: 52px;
+  padding: 0.75rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.addQuantity:focus,
+.addUnit:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
 .undoToast {
   position: fixed;
   bottom: 90px;

@@ -1,5 +1,11 @@
 import Dexie, { type Table } from 'dexie';
-import type { DeadLetterRow, LocalListItemRow, LocalOutboxRow, MetaRow } from './types';
+import type {
+  DeadLetterRow,
+  LocalCategoryRuleRow,
+  LocalListItemRow,
+  LocalOutboxRow,
+  MetaRow,
+} from './types';
 
 /**
  * Lokale Datenbank. Die UI liest ausschließlich hieraus (PLAN.md §4.2).
@@ -11,6 +17,7 @@ import type { DeadLetterRow, LocalListItemRow, LocalOutboxRow, MetaRow } from '.
  */
 export class EinkaufszettelDB extends Dexie {
   list_items!: Table<LocalListItemRow, string>;
+  category_rules!: Table<LocalCategoryRuleRow, string>;
   outbox!: Table<LocalOutboxRow, string>;
   dead_letter!: Table<DeadLetterRow, string>;
   meta!: Table<MetaRow, string>;
@@ -19,6 +26,15 @@ export class EinkaufszettelDB extends Dexie {
     super(name);
     this.version(1).stores({
       list_items: 'id, list_id, name_normalized, deleted_at, updated_at',
+      outbox: 'id, client_ts, table, op',
+      dead_letter: 'id, failed_at',
+      meta: 'key',
+    });
+    // v2: Haushaltsregeln für die Auto-Kategorisierung (A-7). Globale
+    // Seed-Regeln haben `household_id = null`, gelernte Regeln eine Haushalts-ID.
+    this.version(2).stores({
+      list_items: 'id, list_id, name_normalized, deleted_at, updated_at',
+      category_rules: 'id, household_id, keyword, category_key, updated_at',
       outbox: 'id, client_ts, table, op',
       dead_letter: 'id, failed_at',
       meta: 'key',

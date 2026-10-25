@@ -1,13 +1,25 @@
 import {
+  CATEGORY_KEY_TO_ID,
+  SEED_CATEGORY_RULES,
+  type SeedCategoryRule,
+} from '@/lib/data/category-seed';
+import {
   applyCheck,
+  categorize,
+  createRuleFromManualChange,
   enqueue,
   latestTimestamp,
+  learnFromManualChange,
   normalizeName,
   resolveRow,
+  summarizeDuplicate,
   type AddToListEntry,
   type AddToListRequest,
+  type CategoryKey,
+  type CategoryRule,
   type ConflictResolution,
   type DeleteEntry,
+  type DuplicatePreview,
   type FieldTimestamps,
   type ListItem,
   type ListItemFields,
@@ -18,7 +30,12 @@ import {
   type UpsertEntry,
 } from '@einkaufszettel/core';
 import type { EinkaufszettelDB } from './database';
-import type { LocalListItemRow, LocalOutboxRow, NewListItemInput } from './types';
+import type {
+  LocalCategoryRuleRow,
+  LocalListItemRow,
+  LocalOutboxRow,
+  NewListItemInput,
+} from './types';
 import { uuidv7 } from './uuid';
 
 /** Ereignis, auf das der Sync-Worker sofort reagiert (statt bis zum Intervall zu warten). */
@@ -527,3 +544,280 @@ export async function getActiveItems(db: EinkaufszettelDB, listId?: string): Pro
 export async function getDeadLetters(db: EinkaufszettelDB) {
   return db.dead_letter.toArray();
 }
+
+// ---------------------------------------------------------------------------
+// Kategorisierung (A-7 / T2.7)
+// ---------------------------------------------------------------------------
+
+/** Meta-Schlüssel, der die geladene Seed-Version der globalen Regeln festhält. */
+const CATEGORY_SEED_META_KEY = 'category_rules_seed_version';
+const CATEGORY_SEED_VERSION = `v1:${SEED_CATEGORY_RULES.length}`;
+
+export interface CategoryRuleCorrectionInput {
+  articleName: string;
+  categoryKey: CategoryKey;
+  householdId: string;
+}
+
+export interface LearnedCategoryRule {
+  rule: CategoryRule;
+  /** true, wenn eine neue Zeile angelegt wurde; false bei Aktualisierung. */
+  created: boolean;
+}
+
+export interface AddItemOptions {
+  /**
+   * Haushalts-ID für gelernte Regeln. `null`/`undefined` = nur globale
+   * Seed-Regeln, keine Haushaltsregel anlegen.
+   */
+  householdId?: string | null;
+}
+
+export interface AddItemResult {
+  item: ListItem;
+  preview: DuplicatePreview;
+  /** true = neue Zeile, false = Menge einer bestehenden Zeile addiert. */
+  created: boolean;
+}
+
+function categoryRuleFromRow(row: LocalCategoryRuleRow): CategoryRule {
+  return {
+    keyword: row.keyword,
+    categoryKey: row.category_key,
+    householdId: row.household_id,
+  };
+}
+
+function categoryRuleRowFromSeed(rule: SeedCategoryRule, now: string): LocalCategoryRuleRow {
+  return {
+    id: rule.id,
+    household_id: null,
+    keyword: rule.keyword,
+    category_key: rule.categoryKey,
+    category_id: CATEGORY_KEY_TO_ID[rule.categoryKey],
+    created_at: now,
+    updated_at: now,
+    deleted_at: null,
+  };
+}
+
+/**
+ * Legt die globalen Seed-Regeln (T1.5) einmalig in Dexie ab, damit die
+ * Kategorisierung offline ohne Backend läuft. Die IDs sind fest, der Vorgang
+ * ist daher idempotent. Globale Regeln wandern **nicht** in die Outbox — sie
+ * existieren serverseitig bereits per Seed.
+ *
+ * @returns Anzahl der geschriebenen Regeln (0, wenn schon aktuell).
+ */
+export async function ensureCategoryRulesSeeded(
+  db: EinkaufszettelDB,
+  now: string,
+): Promise<number> {
+  const meta = await db.meta.get(CATEGORY_SEED_META_KEY);
+  if (meta?.value === CATEGORY_SEED_VERSION) return 0;
+
+  const rows = SEED_CATEGORY_RULES.map((rule) => categoryRuleRowFromSeed(rule, now));
+  await db.transaction('rw', db.category_rules, db.meta, async () => {
+    await db.category_rules.bulkPut(rows);
+    await db.meta.put({ key: CATEGORY_SEED_META_KEY, value: CATEGORY_SEED_VERSION });
+  });
+  return rows.length;
+}
+
+/**
+ * Alle anwendbaren Regeln: globale Seed-Regeln plus die Regeln des Haushalts.
+ *
+ * Solange der Seed noch nicht in Dexie liegt (frischer Browser, Aufruf vor
+ * `ensureCategoryRulesSeeded`), werden die globalen Regeln direkt aus dem
+ * generierten Seed-Modul geliefert — so ist die Kategorisierung nie leer.
+ */
+export async function getCategoryRules(
+  db: EinkaufszettelDB,
+  householdId?: string | null,
+): Promise<CategoryRule[]> {
+  const rows = (await db.category_rules.toArray()).filter((row) => row.deleted_at === null);
+  const global = rows.filter((row) => row.household_id === null).map(categoryRuleFromRow);
+  const local =
+    householdId === undefined || householdId === null
+      ? []
+      : rows.filter((row) => row.household_id === householdId).map(categoryRuleFromRow);
+
+  const base =
+    global.length > 0
+      ? global
+      : SEED_CATEGORY_RULES.map((rule) => ({
+          keyword: rule.keyword,
+          categoryKey: rule.categoryKey,
+          householdId: null,
+        }));
+
+  return [...base, ...local];
+}
+
+/**
+ * Kategorisiert einen Artikelnamen über die Regeln (T2.7).
+ * Liefert den Schlüssel plus Trefferinformation (für UI-Hinweise).
+ */
+export async function categorizeItemNameLocal(
+  db: EinkaufszettelDB,
+  name: string,
+  householdId?: string | null,
+): Promise<ReturnType<typeof categorize>> {
+  const rules = await getCategoryRules(db, householdId);
+  return categorize(name, rules);
+}
+
+/**
+ * Lernt aus einer manuellen Kategorie-Korrektur eine Haushaltsregel (T2.7).
+ *
+ * Nutzt die reinen core-Verträge (`createRuleFromManualChange` +
+ * `learnFromManualChange`): eine bestehende Haushaltsregel mit gleichem
+ * normalisiertem Keyword wird ersetzt. Persistiert wird nur der Unterschied —
+ * eine unveränderte Korrektur erzeugt keinen Outbox-Eintrag.
+ */
+export async function learnCategoryRuleLocal(
+  db: EinkaufszettelDB,
+  input: CategoryRuleCorrectionInput,
+  now: string,
+): Promise<LearnedCategoryRule> {
+  const createdRule = createRuleFromManualChange(input);
+  const rows = (await db.category_rules.toArray()).filter((row) => row.deleted_at === null);
+  const householdRules = rows
+    .filter((row) => row.household_id === input.householdId)
+    .map(categoryRuleFromRow);
+
+  // core-Semantik anwenden: ersetzt eine bestehende Haushaltsregel.
+  const merged = learnFromManualChange(householdRules, input);
+  const rule = merged.find(
+    (candidate) =>
+      candidate.householdId === input.householdId && candidate.keyword === createdRule.keyword,
+  );
+  if (rule === undefined) {
+    throw new Error('Gelernte Regel fehlt im Ergebnis von learnFromManualChange.');
+  }
+
+  const categoryId = CATEGORY_KEY_TO_ID[rule.categoryKey];
+  const existing = rows.find(
+    (row) => row.household_id === input.householdId && row.keyword === rule.keyword,
+  );
+
+  const row: LocalCategoryRuleRow =
+    existing === undefined
+      ? {
+          id: uuidv7(),
+          household_id: input.householdId,
+          keyword: rule.keyword,
+          category_key: rule.categoryKey,
+          category_id: categoryId,
+          created_at: now,
+          updated_at: now,
+          deleted_at: null,
+        }
+      : {
+          ...existing,
+          category_key: rule.categoryKey,
+          category_id: categoryId,
+          updated_at: now,
+        };
+
+  if (existing !== undefined && existing.category_key === rule.categoryKey) {
+    return { rule, created: false };
+  }
+
+  await db.transaction('rw', db.category_rules, db.outbox, async () => {
+    await db.category_rules.put(row);
+    const entry: UpsertEntry = {
+      id: uuidv7(),
+      table: 'category_rules',
+      op: 'upsert',
+      client_ts: now,
+      attempts: 0,
+      payload: {
+        // Server-Spalten der Tabelle `category_rules` (FK ist `category_id`).
+        row: {
+          id: row.id,
+          household_id: row.household_id,
+          keyword: row.keyword,
+          category_id: row.category_id,
+          updated_at: now,
+        } as unknown as ListItemRowData,
+        changed_fields: ['keyword', 'category_id', 'updated_at'],
+      },
+    };
+    await enqueueOutbox(db, entry);
+  });
+  notifyOutboxChanged();
+  return { rule, created: existing === undefined };
+}
+
+/**
+ * Speichert eine manuelle Kategorie-Korrektur am Artikel und lernt daraus eine
+ * Haushaltsregel. Der Artikel-Update läuft über `updateItemLocal` (Outbox),
+ * die Regel über `learnCategoryRuleLocal`.
+ */
+export async function correctItemCategoryLocal(
+  db: EinkaufszettelDB,
+  itemId: string,
+  categoryKey: CategoryKey,
+  householdId: string,
+  now: string,
+): Promise<ListItem | null> {
+  const item = await getItem(db, itemId);
+  if (item === null) return null;
+  const updated = await updateItemLocal(db, itemId, { category_id: categoryKey }, now);
+  await learnCategoryRuleLocal(
+    db,
+    { articleName: item.fields.name, categoryKey, householdId },
+    now,
+  );
+  return updated;
+}
+
+/**
+ * Add-Flow mit Duplikat-Zusammenfassung (T2.8) und Auto-Kategorisierung (T2.7).
+ *
+ * - gleicher `name_normalized` + gleiche Dimension → Menge wird auf der
+ *   bestehenden Zeile addiert, `preview.hint` macht die Zusammenfassung sichtbar;
+ * - andere Dimension → eigene Zeile, Hinweis im `preview.hint`;
+ * - neue Zeile bekommt die Kategorie aus `categorize()` (sofern der Aufrufer
+ *   keine Kategorie mitgibt).
+ */
+export async function addItemLocal(
+  db: EinkaufszettelDB,
+  input: NewListItemInput,
+  now: string,
+  options: AddItemOptions = {},
+): Promise<AddItemResult> {
+  const active = await getActiveItems(db, input.list_id);
+  const preview = summarizeDuplicate(active, {
+    name: input.name,
+    name_normalized: input.name_normalized ?? normalizeName(input.name),
+    quantity: input.quantity ?? null,
+    unit: input.unit ?? null,
+  });
+
+  if (preview.kind === 'aggregate' && preview.targetId !== null) {
+    const updated = await updateItemLocal(
+      db,
+      preview.targetId,
+      { quantity: preview.quantity },
+      now,
+    );
+    if (updated !== null) return { item: updated, preview, created: false };
+  }
+
+  // Die UI arbeitet mit Kategorie-Schlüsseln (`milch_eier`); die Server-UUID
+  // entsteht erst an der Sync-Grenze (siehe `categoryKeyToDbId`).
+  let categoryId = input.category_id ?? null;
+  if (categoryId === null) {
+    const result = await categorizeItemNameLocal(db, input.name, options.householdId ?? null);
+    categoryId = result.categoryKey;
+  }
+
+  const item = await createItemLocal(db, { ...input, category_id: categoryId }, now);
+  return { item, preview, created: true };
+}
+
+// Die Kategorie-Übersetzung liegt in `@/lib/data/category-map` (kein Zyklus mit
+// der Sync-Schicht); hier nur re-exportiert für Aufrufer des Repositories.
+export { categoryDbIdToKey, categoryKeyToDbId } from '@/lib/data/category-map';
