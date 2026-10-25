@@ -1,0 +1,25 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	tls {
+		dns lego_deprecated ipv64
+	}
+
+	encode zstd gzip
+
+	# Supabase-REST-API (PostgREST erwartet den Pfad ohne /rest/v1)
+	handle_path /rest/v1/* {
+		reverse_proxy rest:3000
+	}
+
+	# Supabase-Auth-API (GoTrue erwartet den Pfad ohne /auth/v1)
+	handle_path /auth/v1/* {
+		reverse_proxy auth:9999
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

@@ -1,0 +1,129 @@
+name: einkaufszettel
+
+services:
+  db:
+    image: supabase/postgres:15.19.0.007
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d $${POSTGRES_DB:-postgres}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - backend
+
+  auth:
+    image: supabase/gotrue:v2.197.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: '9999'
+      API_EXTERNAL_URL: https://${DOMAIN:-localhost}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}
+      GOTRUE_SITE_URL: https://${DOMAIN:-localhost}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me-32-chars-min}
+      GOTRUE_JWT_EXP: '3600'
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_DISABLE_SIGNUP: 'false'
+      GOTRUE_MAILER_AUTOCONFIRM: 'true'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:9999/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - backend
+
+  rest:
+    image: postgrest/postgrest:v16.5
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me-32-chars-min}
+      PGRST_DB_USE_LEGACY_GUCS: 'false'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/ || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - backend
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_SUPABASE_URL: https://${DOMAIN:-localhost}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY:-dev-anon-key}
+    depends_on:
+      auth:
+        condition: service_started
+      rest:
+        condition: service_started
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend
+      - edge
+
+  caddy:
+    build:
+      context: .
+      dockerfile: caddy/Dockerfile
+    restart: unless-stopped
+    ports:
+      - '${HTTPS_PORT:-443}:443'
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+      IPV64_API_KEY: ${IPV64_API_KEY:-}
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'caddy', 'validate', '--config', '/etc/caddy/Caddyfile']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - edge
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  backend:
+    internal: true
+  edge:

@@ -1,0 +1,8 @@
+node_modules
+.next
+dist
+coverage
+backups
+pnpm-lock.yaml
+.husky/_
+apps/web/next-env.d.ts
