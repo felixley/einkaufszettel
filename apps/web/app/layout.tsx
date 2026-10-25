@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AuthProvider } from '@/context/AuthContext';
+import { SyncProvider } from '@/lib/sync/SyncProvider';
 import './globals.css';
 
 export const metadata = {
@@ -11,7 +12,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="de">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <SyncProvider>{children}</SyncProvider>
+        </AuthProvider>
       </body>
     </html>
   );

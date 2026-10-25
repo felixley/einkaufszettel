@@ -212,3 +212,66 @@ a {
   border: 1px solid var(--border);
   color: var(--muted);
 }
+
+/* Sync-Status: kompakt, aber als Touch-Ziel mindestens 44 px hoch. */
+.sync-row {
+  display: flex;
+  justify-content: flex-start;
+  margin: 0 0 0.5rem;
+}
+
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.45rem;
+  width: auto;
+  min-height: 2.75rem; /* 44 px */
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  cursor: default;
+}
+
+.sync-status:active {
+  transform: translateY(1px);
+}
+
+.sync-status.tone-success {
+  color: var(--success-fg);
+  border-color: var(--success-fg);
+}
+
+.sync-status.tone-warning {
+  color: #8a5a00;
+  border-color: #c98a12;
+}
+
+.sync-status.tone-danger {
+  color: var(--danger-fg);
+  border-color: var(--danger-fg);
+}
+
+.sync-status.tone-info {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.sync-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sync-status.tone-warning {
+    color: #f2c14e;
+    border-color: #f2c14e;
+  }
+}

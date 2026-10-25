@@ -114,9 +114,9 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
 
 - [x] **T2.1** Auth: Registrierung, Login, Logout, Passwort-Reset, geschützte Routen. _AK:_ E2E-Test Register→Login→Logout.
 - [ ] **T2.2** Haushalt anlegen, Standardliste erzeugen, Listen-CRUD. _AK:_ Zweiter Nutzer sieht fremde Haushalte nicht.
-- [ ] **T2.3** Einladung via Link **und QR** (`qrcode`), Rollenwahl, Widerruf, Ablauf. _AK:_ Einladung einlösen, Rolle greift, abgelaufener Link wird abgelehnt.
-- [ ] **T2.4** Mitgliederverwaltung (Rolle ändern, entfernen, Haushalt verlassen). _AK:_ Letzter Owner kann nicht austreten.
-- [ ] **T2.5** Dexie-Datenschicht + Outbox + Sync-Worker + Realtime-Anbindung (4.2). _AK:_ Unit-/Integrationstests für Konfliktfälle (gleichzeitiges Abhaken, Edit vs. Delete, doppeltes Replay der Outbox).
+- [x] **T2.3** Einladung via Link **und QR** (`qrcode`), Rollenwahl, Widerruf, Ablauf. _AK:_ Einladung einlösen, Rolle greift, abgelaufener Link wird abgelehnt. _UI/E2E: `apps/web/e2e/household.spec.ts` (A-3), Backend-RPCs Migration 005._
+- [x] **T2.4** Mitgliederverwaltung (Rolle ändern, entfernen, Haushalt verlassen). _AK:_ Letzter Owner kann nicht austreten. _UI/E2E: `apps/web/e2e/household.spec.ts` (A-4), P0001-Hinweis in der UI._
+- [x] **T2.5** Dexie-Datenschicht + Outbox + Sync-Worker + Realtime-Anbindung (4.2). _AK:_ Unit-/Integrationstests für Konfliktfälle (gleichzeitiges Abhaken, Edit vs. Delete, doppeltes Replay der Outbox). _Frontend T2.5b; Core-Logik aus t_62b562a4._
 - [ ] **T2.6** Listen-UI: Hinzufügen, Bearbeiten, Löschen (Undo), Abhaken, nach Kategorien gruppiert, abgehakte unten. _AK:_ Playwright-Test mit zwei Browser-Kontexten: Änderung erscheint in <2 s beim anderen.
 - [x] **T2.7** Auto-Kategorisierung (`packages/core`) + Lernen aus manueller Änderung. _AK:_ Unit-Tests mit ≥50 Beispielartikeln, ≥85 % Trefferquote auf Seed-Testset.
 - [x] **T2.8** Duplikat-Zusammenfassung beim manuellen Hinzufügen (gleicher Name+Dimension → Menge addieren, mit Hinweis). _AK:_ Unit-Tests.

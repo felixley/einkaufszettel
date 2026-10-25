@@ -12,7 +12,7 @@
     "lint:fix": "eslint . --fix && prettier --write .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm -r --if-present typecheck",
+    "typecheck": "pnpm --filter @einkaufszettel/core build && tsc --noEmit -p tsconfig.json && pnpm -r --if-present typecheck",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "pnpm --filter @einkaufszettel/web test:e2e",
