@@ -89,8 +89,8 @@ Regelbasiert über `category_rules` (Start-Seed mit ca. 300 deutschen Keywords).
 Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
 
 ### Phase 1 – Fundament & Infrastruktur
-- [ ] **T1.1** Monorepo, TypeScript strict, ESLint, Prettier, Vitest, Husky. *AK:* `pnpm lint && pnpm typecheck && pnpm test` läuft grün.
-- [ ] **T1.2** GitHub Actions CI (lint, typecheck, test, build). *AK:* Pipeline grün auf `main`.
+- [x] **T1.1** Monorepo, TypeScript strict, ESLint, Prettier, Vitest, Husky. *AK:* `pnpm lint && pnpm typecheck && pnpm test` läuft grün.
+- [x] **T1.2** GitHub Actions CI (lint, typecheck, test, build). *AK:* Pipeline grün auf `master`.
 - [ ] **T1.3** Docker Compose: Supabase-Stack + Next.js + Caddy mit HTTPS über **ipv64.net (DNS-01)**. *AK:* `docker compose up` startet alles; App unter `https://<name>.ipv64.net` (bzw. Subdomain) mit gültigem Zertifikat erreichbar; `/health` antwortet.
   - **Zertifikate:** Let's-Encrypt per **DNS-01-Challenge** mit ipv64-API-Key (`IPV64_API_KEY` in `.env`). Lego unterstützt ipv64 (Provider-Code `ipv64`). Vorteil: kein offener Port 80/443 nötig, Zugriff kann auf LAN/VPN beschränkt bleiben.
   - **Variante A (bevorzugt):** Eigenes Caddy-Image per `xcaddy build --with github.com/caddy-dns/lego-deprecated`, im Caddyfile `tls { dns lego_deprecated ipv64 }`. Hinweis: das Modul ist ein Übergangs-Shim.
@@ -100,7 +100,7 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
 - [x] **T1.4** Migrationen für Datenmodell 4.1 inkl. Trigger, Indizes, **RLS-Policies**. *AK:* pgTAP-Tests belegen: Nichtmitglied sieht nichts, Viewer kann nicht schreiben, Editor kann Items ändern, nur Owner verwaltet Mitglieder.
 - [x] **T1.5** Seed: Kategorien + Keyword-Regeln, Einheiten. *AK:* `supabase db reset` liefert lauffähige Basisdaten.
 - [ ] **T1.6** `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, Wireframes als einfache Low-Fi-Komponenten-Skizzen (Liste, Rezept, Import-Dialog) in `docs/wireframes.md`.
-- [ ] **T1.7** `.env.example`, `README` mit Setup in max. 5 Schritten, Backup-Skript (`scripts/backup.sh`, Cron-Beispiel).
+- [x] **T1.7** `.env.example`, `README` mit Setup in max. 5 Schritten, Backup-Skript (`scripts/backup.sh`, Cron-Beispiel).
 
 🛑 **Human Gate 1:** Schema, RLS-Konzept und Wireframes freigeben.
 
