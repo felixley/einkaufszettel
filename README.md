@@ -53,9 +53,53 @@ Reduziertes self-hosted Supabase plus Next.js und Caddy:
 | `caddy` | `caddy/Dockerfile`              | TLS via ipv64.net DNS-01, Reverse Proxy |
 
 Nicht enthalten (bewusst reduziert): Studio, Kong, Realtime, Storage. Fuer
-Phase 2 (Sync/Realtime) wird der Stack erweitert. Migrationen werden beim
-ersten DB-Start aus `supabase/migrations/` eingespielt (Bind-Mount nach
-`/docker-entrypoint-initdb.d`).
+Phase 2 (Sync/Realtime) wird der Stack erweitert. Schema-Migrationen und Seed
+werden beim ersten DB-Start aus `supabase/migrations/` bzw. `supabase/seed.sql`
+eingespielt (Bind-Mounts nach `/docker-entrypoint-initdb.d`).
+
+### Seed und Reset
+
+Ein frischer Stack startet mit Basisdaten: 13 globale Kategorien und 389
+Keyword-Regeln. `docker-compose.yml` mountet dafuer zusaetzlich
+`./supabase/seed.sql` als `zz_seed.sql` in `/docker-entrypoint-initdb.d`;
+durch das `zz_`-Praefix laeuft der Seed alphabetisch nach den Migrationen.
+
+Die Init-Skripte des Postgres-Images laufen **nur bei leerem Datenvolume**.
+Nach Aenderungen an Schema oder Seed daher neu initialisieren (loescht
+Dev-Daten):
+
+```bash
+docker compose down -v        # entfernt db-data
+docker compose up -d --build  # Migrationen + Seed laufen erneut
+```
+
+Pruefen (auf dem Docker-Host, nach `up`):
+
+```bash
+docker compose exec -T db psql -U postgres -d postgres -tAc \
+  "select count(*) from public.categories"      # 13
+docker compose exec -T db psql -U postgres -d postgres -tAc \
+  "select count(*) from public.category_rules"  # 389
+```
+
+Alternativ mit der Supabase CLI: `supabase db reset`. Die CLI liest
+`supabase/config.toml` (`project_id`, `[db.seed] enabled = true`,
+`sql_paths = ["./seed.sql"]`) und spielt Migrationen + Seed in eine lokale
+Dev-Datenbank. Auch dieser Weg benoetigt eine laufende Docker-Engine.
+
+**Nachweis (lokale Verifikation, echter Output):** In der
+Entwicklungsumgebung dieser Welle lief kein Docker-Daemon; derselbe SQL-Pfad
+(Bootstrap + Migration 001/002 + Seed) wurde daher gegen ein portables
+PostgreSQL 18.4 mit Supabase-Kompatibilitaets-Shim ausgefuehrt. Ergebnis:
+
+```text
+categories=13  category_rules=389  global_categories=13
+categories=13  category_rules=389  (nach zweitem Seed-Lauf, idempotent)
+```
+
+Der Compose-/CLI-Lauf selbst (`docker compose up`, `supabase db reset`) ist in
+dieser Umgebung nicht ausfuehrbar und muss auf einem Docker-Host nachgeholt
+werden. Details in [`docs/DECISIONS.md`](./docs/DECISIONS.md).
 
 ### HTTPS / Caddy
 

@@ -34,8 +34,8 @@ Format je Eintrag: Datum, Entscheidung, Begründung, Alternative, Risiko/Status.
   Migrationen berühren (`auth.users`, `auth.uid()`, Rollen, Grants). Die
   Ersetzung ist damit aussagekräftig für RLS/Trigger/Seed-Verhalten.
 - **Alternative:** Warten auf einen Docker-Host und dort `supabase db reset`
-  + `supabase test db` laufen lassen. Der Shim bleibt als schnelle lokale
-  Vorprüfung nützlich, weil er Sekunden statt Container-Starts braucht.
+  - `supabase test db` laufen lassen. Der Shim bleibt als schnelle lokale
+    Vorprüfung nützlich, weil er Sekunden statt Container-Starts braucht.
 - **Risiko/Status:** Verifikation ist **grün**: Migration 001/002 und Seed
   laufen mit `ON_ERROR_STOP=1` fehlerfrei; pgTAP `01_rls.sql` meldet
   **45/45 ok, 0 Fehler**. Seed ist idempotent (zweiter Lauf: weiterhin
@@ -45,3 +45,34 @@ Format je Eintrag: Datum, Entscheidung, Begründung, Alternative, Risiko/Status.
   außerhalb des Repos unter
   `/opt/data/profiles/backend/cache/scratch/pg/` (`bootstrap.sql`,
   `pgtap_ready.sql`, `run_verify.sh`).
+
+## 2026-10-25 — Seed doppelt verdrahtet: Compose-Init + Supabase-CLI
+
+- **Entscheidung:** `supabase/seed.sql` wird auf zwei Wegen eingespielt:
+  1. Compose-Stack: Bind-Mount `./supabase/seed.sql` →
+     `/docker-entrypoint-initdb.d/zz_seed.sql` (alphabetisch nach den
+     Migrationen, nur beim ersten Start eines leeren `db-data`-Volumes).
+  2. Supabase CLI: `supabase/config.toml` mit `project_id = "einkaufszettel"`
+     und `[db.seed] enabled = true, sql_paths = ["./seed.sql"]` für
+     `supabase db reset`.
+- **Begründung:** Der Compose-Stack nutzt die Supabase CLI nicht; ohne den
+  zusätzlichen Mount bliebe eine frische Datenbank leer (0 statt 13
+  Kategorien). Umgekehrt braucht `supabase db reset` die Projektkonfiguration.
+  Beide Pfade verwenden dieselbe idempotente Seed-Datei; ein zweiter Lauf
+  erzeugt keine Duplikate (`ON CONFLICT DO NOTHING`).
+- **Alternative:** Nur Compose-Mount (dann ist `supabase db reset` nicht
+  lauffähig) oder nur CLI (dann startet der Compose-Stack ohne Basisdaten).
+- **Risiko/Status:** Init-Skripte laufen nur bei leerem Datenvolume; nach
+  Schema-/Seed-Änderungen ist `docker compose down -v` nötig (löscht
+  Dev-Daten). Verifiziert in dieser Sandbox ohne Docker-Daemon:
+  - `docker-compose config -q` (v5.6.1) exit 0; der gerenderte Seed-Mount
+    erscheint als `source: .../supabase/seed.sql` →
+    `target: /docker-entrypoint-initdb.d/zz_seed.sql`, `read_only: true`.
+  - Portable PostgreSQL 18.4 + Supabase-Shim, Bootstrap + Migration 001/002 +
+    Seed: `categories=13`, `category_rules=389`, `global_categories=13`;
+    zweiter Seed-Lauf weiterhin 13/389 (idempotent).
+  - Supabase CLI 2.122.0 parst `supabase/config.toml` und scheitert erst an
+    der fehlenden Docker-Engine (`LocalDbRunningError`), nicht an der
+    Konfiguration.
+    Offen: Laufzeitnachweis `docker compose up` bzw. `supabase db reset` auf
+    einem Docker-Host.

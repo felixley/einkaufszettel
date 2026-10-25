@@ -1,0 +1,12 @@
+# Supabase-CLI-Konfiguration (lokale Entwicklung).
+# Dokumentation: https://supabase.com/docs/guides/local-development/cli/config
+#
+# Diese Datei ist bewusst minimal gehalten: Sie ergänzt nur die Projekt-ID und
+# den Seed-Pfad. Alle übrigen Werte verwendet die CLI mit ihren Defaults.
+# `supabase db reset` spielt damit zuerst supabase/migrations/*.sql und danach
+# supabase/seed.sql ein. Keine Secrets in dieser Datei.
+project_id = "einkaufszettel"
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]

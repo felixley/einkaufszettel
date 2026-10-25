@@ -10,6 +10,8 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
       - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+      # Seed alphabetisch nach den Migrationen (zz_ sortiert hinter 2026...).
+      - ./supabase/seed.sql:/docker-entrypoint-initdb.d/zz_seed.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres -d $${POSTGRES_DB:-postgres}']
       interval: 10s
