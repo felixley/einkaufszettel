@@ -5,6 +5,17 @@ function uniqueEmail(): string {
   return `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
 }
 
+/**
+ * Der Passwort-Reset-Test nutzt die Mock-Route (Link direkt auf der Seite).
+ * Gegen ein echtes GoTrue-Backend kommt der Link per Mail, deshalb dort skip
+ * (siehe D8.6 in docs/REVIEW.md).
+ */
+function isMockAuth(): boolean {
+  if (process.env.NEXT_PUBLIC_AUTH_MOCK === 'true') return true;
+  if (process.env.NEXT_PUBLIC_AUTH_MOCK === 'false') return false;
+  return !process.env.NEXT_PUBLIC_SUPABASE_URL;
+}
+
 /** Navigiert und wartet, bis React hydratisiert ist (sonst nativer Form-Submit). */
 async function gotoHydrated(page: Page, path: string): Promise<void> {
   await page.goto(path);
@@ -36,8 +47,10 @@ test('Register -> Login -> Logout', async ({ page }) => {
   await page.getByRole('button', { name: 'Anmelden' }).click();
 
   await expect(page).toHaveURL(/\/lists$/);
-  await expect(page.getByRole('heading', { name: 'Einkaufslisten' })).toBeVisible();
-  await expect(page.getByText(email)).toBeVisible();
+  // T2.6-UI rendert die Ueberschrift in Singular; die E-Mail wird dort nicht
+  // mehr angezeigt (D8.1).
+  await expect(page.getByRole('heading', { name: 'Einkaufsliste', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Abmelden' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Abmelden' }).click();
   await expect(page).toHaveURL(/\/login$/);
@@ -45,6 +58,7 @@ test('Register -> Login -> Logout', async ({ page }) => {
 });
 
 test('Passwort-Reset (Mock): neues Passwort setzen und anmelden', async ({ page }) => {
+  test.skip(!isMockAuth(), 'Mock-only: echter Reset-Link kommt per GoTrue-Mail.');
   const email = uniqueEmail();
   const password = 'geheim1234';
   const newPassword = 'neuespasswort9';
@@ -79,5 +93,5 @@ test('Passwort-Reset (Mock): neues Passwort setzen und anmelden', async ({ page 
   await page.getByLabel('Passwort', { exact: true }).fill(newPassword);
   await page.getByRole('button', { name: 'Anmelden' }).click();
   await expect(page).toHaveURL(/\/lists$/);
-  await expect(page.getByText(email)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Einkaufsliste', exact: true })).toBeVisible();
 });
