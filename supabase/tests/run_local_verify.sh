@@ -70,7 +70,8 @@ say "4b. Funktionale Migrationen 003-006 (je zweimal = Idempotenz)"
 for m in 20261025_003_rpc_household_lists.sql \
          20261025_004_fix_lists_rls.sql \
          20261025_005_invites_and_members.sql \
-         20261025_006_fix_household_members_rls.sql; do
+         20261025_006_fix_household_members_rls.sql \
+         20261025_007_sync_auth_profiles.sql; do
   run_sql "$REPO/supabase/migrations/$m" "Migration $m (1. Lauf)" || exit 1
   run_sql "$REPO/supabase/migrations/$m" "Migration $m (2. Lauf = Idempotenz)" || exit 1
 done
@@ -84,7 +85,7 @@ run_sql "$REPO/supabase/seed.sql" "Seed (2. Lauf = Idempotenz)" || exit 1
 # SQL-Fehler ("ERROR:") geprueft — sonst meldet der Lauf faelschlich gruen.
 RC=0
 n=6
-for t in 01_rls 02_rpc_household_lists 03_invites_and_members; do
+for t in 01_rls 02_rpc_household_lists 03_invites_and_members 04_profiles_sync; do
   say "$n. pgTAP $t"
   LOG="/tmp/ez_verify_${t}.log"
   "$PSQL" -h "$SOCK" -p "$PORT" -U "$DBUSER" -d "$DB" -f "$REPO/supabase/tests/$t.sql" > "$LOG" 2>&1
