@@ -155,6 +155,56 @@ die Abnahme, entscheidet aber nicht.
 
 ---
 
+## Welle 2 — Backend (`backend`) · T2.2 Backend-Anteil (Liste/Haushalt)
+
+### T2.2 Haushalt + Standardliste + Listen-CRUD (RPC/RLS)
+- **Status Backend:** **fertig** (Migrationen + pgTAP). Der **UI-Anteil** (Onboarding-
+  Dialog „Haushalt anlegen“, Listen-Umschalter, Undo nach Soft-Delete, E2E-Nachweis
+  A-2 mit zwei Browser-Kontexten) liegt bei `frontend`; die Checkbox in `PLAN.md`
+  bleibt deshalb offen, bis beide Anteile zusammen abgenommen sind.
+- **Gelieferte Pfade:**
+  - `supabase/migrations/20261025_003_rpc_household_lists.sql` — RPCs
+    `create_household`, `ensure_default_list`, `create_list`, `rename_list`,
+    `soft_delete_list`, `restore_list`, `list_lists`, `get_list`; interner
+    Replay-Helfer im Schema `internal` (nicht per PostgREST exponiert).
+  - `supabase/migrations/20261025_004_fix_lists_rls.sql` — RLS-Fix für
+    Soft-Delete/Restore auf `lists`; `get_list` als `SETOF`.
+  - `supabase/tests/02_rpc_household_lists.sql` — 62 pgTAP-Tests.
+- **Akzeptanzkriterien (belegt):**
+  - Haushalt + Standardliste werden **atomar** und **replay-sicher** angelegt
+    (Client-UUIDs; zweiter Aufruf mit derselben ID legt nichts doppelt an).
+  - Listen-CRUD: anlegen, lesen (`get_list`, `list_lists`), umbenennen,
+    soft-löschen, wiederherstellen; Replay ist jeweils ein No-op.
+  - **Nichtmitglied sieht fremde Haushalte/Listen nicht** (0 Zeilen; pgTAP
+    „Nichtmitglied C sieht den fremden Haushalt nicht“ / „… sieht keine Listen
+    des fremden Haushalts“ / „… sieht eine fremde Liste nicht“).
+  - Rollen: Editor darf Listen/Items ändern, Viewer nicht, nur Owner verwaltet
+    Mitglieder. RPCs sind durchgehend `SECURITY INVOKER`, RLS greift also auch
+    innerhalb der Funktionen; `anon` hat keinerlei EXECUTE.
+- **Test-Nachweis:** kompletter Lauf auf frischer PostgreSQL-16.2-Instanz
+  (Supabase-Shim + pgTAP): Basisschema 001/002 einmalig (CREATE TYPE/TABLE ist
+  naturgemäß nicht wiederholbar), die funktionalen Migrationen 003/004 je
+  **zweimal** (Idempotenz), Seed zweimal, danach beide Suites:
+  `01_rls` 45/45 ok, `02_rpc_household_lists` 62/62 ok, **107 ok, 0 Fehlschläge**.
+  Reproduzierbar aus dem Repo mit
+  `PGROOT=<pg-shim> bash supabase/tests/run_local_verify.sh`
+  (Exit 0 = alles grün; echtes Output-Snippet in `docs/TESTLOG-T2.2.md`).
+- **Technische Entscheidungen (Begründung im Migrationskopf):**
+  1. `lists_select` erlaubt Ownern/Editoren den Blick auf soft-gelöschte Zeilen.
+     Grund: PostgreSQL wendet die SELECT-`USING`-Klausel bei `UPDATE` zusätzlich
+     auf die NEUE Zeile an; mit `deleted_at IS NULL` schlug jedes Soft-Delete
+     mit „new row violates row-level security policy“ fehl. Viewer sehen
+     weiterhin nur aktive Listen, Nichtmitglieder gar nichts.
+  2. `get_list` gibt `SETOF public.lists` zurück statt einer einzelnen
+     Komposit-Zeile. Grund: eine Einzel-Komposit-Rückgabe liefert bei leerem
+     Treffer `NULL`, und `count(*)` zählt diese NULL-Zeile als 1 — Clients und
+     Tests sahen einen Treffer, obwohl nichts geliefert wurde. `SETOF` macht
+     „leer“ sauber zu 0 Zeilen (PostgREST: leeres Array, `.maybeSingle()` → null).
+- **Offene Fragen:** Keine. Frontend kann die RPCs direkt über
+  `supabase.rpc(...)` ansprechen; `get_list`/`list_lists` liefern Arrays.
+
+---
+
 **Nächster Schritt:** Re-Scope-Kommentare an den Karten beachten (Body ignorieren),
 dann T1.1 starten. MVP-Feature-AKs für Phase 2: `PLAN.md` Anhang A (A-1…A-8).
 Rückmeldung an architect: Commit-Hash, erfüllte T1.x/AK, offene Punkte.
