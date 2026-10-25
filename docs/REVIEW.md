@@ -8,15 +8,15 @@
 
 ## 1. Prüfumfang
 
-| Aufgabe | Prüfgegenstand | Geprüft |
-|---|---|---|
-| T1.1 | Monorepo/Tooling, frischer Checkout: `pnpm lint && pnpm typecheck && pnpm test` | ja, auf frischem Clone |
-| T1.2 | GitHub Actions CI, YAML lokal via `actionlint`, Pipeline grün | ja, lokal + GitHub-API |
-| T1.3 | Compose-Stack (db/auth/rest/web/caddy), HTTPS/ipv64-DNS-01, `/health` | teilweise (Config/Images statisch; Laufzeit nicht möglich) |
-| T1.4 | Migrationen, Trigger, Indizes, RLS; pgTAP-Rollenfälle | ja, vollständig ausgeführt |
-| T1.5 | Seed: 13 Kategorien, >0 Regeln, idempotent; `supabase db reset` | ja, Seed ausgeführt; `db reset` nicht möglich |
-| T1.6 | `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/wireframes.md` | ja, Datei-/Inhaltsprüfung |
-| T1.7 | README ≤5 Schritte, `.env.example`, `scripts/backup.sh` (Exit 0, >0 Byte) | ja, Backup real gegen PG ausgeführt |
+| Aufgabe | Prüfgegenstand                                                                  | Geprüft                                                    |
+| ------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| T1.1    | Monorepo/Tooling, frischer Checkout: `pnpm lint && pnpm typecheck && pnpm test` | ja, auf frischem Clone                                     |
+| T1.2    | GitHub Actions CI, YAML lokal via `actionlint`, Pipeline grün                   | ja, lokal + GitHub-API                                     |
+| T1.3    | Compose-Stack (db/auth/rest/web/caddy), HTTPS/ipv64-DNS-01, `/health`           | teilweise (Config/Images statisch; Laufzeit nicht möglich) |
+| T1.4    | Migrationen, Trigger, Indizes, RLS; pgTAP-Rollenfälle                           | ja, vollständig ausgeführt                                 |
+| T1.5    | Seed: 13 Kategorien, >0 Regeln, idempotent; `supabase db reset`                 | ja, Seed ausgeführt; `db reset` nicht möglich              |
+| T1.6    | `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, `docs/wireframes.md`               | ja, Datei-/Inhaltsprüfung                                  |
+| T1.7    | README ≤5 Schritte, `.env.example`, `scripts/backup.sh` (Exit 0, >0 Byte)       | ja, Backup real gegen PG ausgeführt                        |
 
 **Nicht prüfbar in dieser Umgebung:** `docker compose up --build`, Caddy-Image-Build (`xcaddy`), gültiges Let's-Encrypt-Zertifikat, HTTPS-Erreichbarkeit, Renewal-Dry-Run, Backup gegen den Compose-DB-Container. Ursache: kein Docker-Daemon (`Cannot connect to the Docker daemon at unix:///var/run/docker.sock`). Das ist eine Umgebungs-, keine Implementierungsgrenze; der Nachweis muss auf einem Docker-Host nachgeholt werden.
 
@@ -181,61 +181,67 @@ Das Backup-Skript wurde **real** gegen eine frische PG-Datenbank (qa_backup_veri
 ## 3. Befunde / Defekte
 
 ### D1 — [kritisch] Seed wird im Compose-Stack nicht eingespielt; `supabase db reset` nicht möglich (T1.5)
+
 - **Ist:** `supabase/config.toml` fehlt; `docker-compose.yml` bindet nur `./supabase/migrations` ein. `supabase db reset` ist ohne Projektkonfiguration nicht lauffähig. Nach `docker compose up` ist `public.categories` leer (0 statt 13).
 - **Soll:** `supabase db reset` liefert 13 Kategorien und >0 Regeln; ein frischer Stack startet mit Basisdaten.
 - **Reproduktion:**
   1. `cd /opt/data/workspace/einkaufszettel`
-  2. `ls supabase/config.toml` → *No such file or directory*
+  2. `ls supabase/config.toml` → _No such file or directory_
   3. `grep -n 'docker-entrypoint-initdb.d' docker-compose.yml` → nur `./supabase/migrations`
   4. Auf Docker-Host: `docker compose up -d --build`; danach `select count(*) from categories;` → 0
   5. `supabase db reset` → Abbruch wegen fehlender `config.toml`
 - **Fix-Vorschlag:** `supabase/config.toml` mit Projekt-ID und `[db.seed] enabled = true, sql_paths = ["./seed.sql"]` anlegen; zusätzlich `./supabase/seed.sql:/docker-entrypoint-initdb.d/zz_seed.sql:ro` mounten (alphabetisch nach den Migrationen) **oder** einen dokumentierten Seed-Schritt in README/Skript ergänzen. Auf Docker-Host `supabase db reset` + Zählabfrage nachweisen.
 
 ### D2 — [kritisch] `docs/ARCHITECTURE.md` fehlt (T1.6a)
+
 - **Ist:** Datei nicht vorhanden; `PLAN.md`-Checkbox T1.6 offen. `DECISIONS.md` und `wireframes.md` sind vorhanden.
 - **Soll:** `docs/ARCHITECTURE.md` existiert, verweist auf `PLAN.md` §4 (Datenmodell, Sync/LWW, Einheiten, Kategorien, Sicherheit/RLS) und widerspricht dem Plan nicht.
-- **Reproduktion:** `ls docs/ARCHITECTURE.md` → *No such file or directory*; `grep -n 'T1.6' PLAN.md` → `- [ ]`.
+- **Reproduktion:** `ls docs/ARCHITECTURE.md` → _No such file or directory_; `grep -n 'T1.6' PLAN.md` → `- [ ]`.
 - **Fix-Vorschlag:** `docs/ARCHITECTURE.md` anlegen (Datenmodell §4.1, Sync/Outbox/LWW §4.2, Einheiten-Taxonomie §4.3, Kategorien §4.4, RLS/Invite-Sicherheit §4.5, Komponenten/Deployment), Checkbox T1.6 abhaken. T1.6b (Wireframes) ist bereits erfüllt.
 
 ### D3 — [hoch] Laufzeitnachweis für T1.3 fehlt
+
 - **Ist:** `docker compose config` grün, Image-Tags existieren, Caddyfile Variante A plausibel. Aber kein `docker compose up --build`, kein Caddy-Build, kein gültiges Zertifikat, kein HTTPS-`/health`-Nachweis (Docker-Daemon fehlt). Das AK verlangt genau diesen Nachweis.
 - **Soll:** Auf einem Docker-Host: `docker compose up -d --build`; `docker compose ps` (web healthy); `curl -fsS https://<domain>/health` → `{"status":"ok"}`; Zertifikatsaussteller/Validity prüfen; Renewal-Dry-Run (`caddy reload` bzw. `lego renew --dry-run`) dokumentieren. PO-Entscheidung zu Platzhaltern (Domain/IP) ist dokumentiert — Zertifikatstest bleibt bis echte Werte offen.
 - **Reproduktion:** In der Sandbox `docker compose up` → `Cannot connect to the Docker daemon`.
 - **Kein Implementierungsfehler nachweisbar**, aber das AK ist ohne Host-Lauf nicht erfüllt. Nicht als „bestanden“ wertbar.
 
 ### D4 — [mittel] Kein Seed-Mount / Dev-Experience (Teil von D1)
+
 - **Ist:** README sagt „Migrationen werden beim ersten DB-Start … eingespielt“ — Seed fehlt. Ein frischer `docker compose up` liefert eine leere Kategorien-/Regelbasis; Auto-Kategorisierung und Listen-UI hätten keine Basisdaten.
 - **Soll:** Nach README-Start sind 13 Kategorien und Regeln vorhanden.
 - **Fix:** siehe D1 (Seed-Mount + README-Schritt).
 
 ### D5 — [niedrig] DoD-Verstoß: Checkboxen nicht abgehakt
+
 - **Ist:** `PLAN.md` Checkboxen T1.1, T1.2, T1.3, T1.6, T1.7 sind `[ ]`, obwohl T1.1/T1.2 substanziell erfüllt sind; T1.4/T1.5 sind `[x]`.
 - **Soll:** `PLAN.md` §0.2 DoD: Checkbox je Aufgabe abgehakt.
 - **Reproduktion:** `grep -n 'T1\.[1-7]' PLAN.md` → Zeilen 92–103.
 - **Fix:** Checkboxen nach Nachweis abhaken (T1.3/T1.6 erst nach D2/D3).
 
 ### D6 — [Info] `main` vs. `master`
+
 - `PLAN.md` AK T1.2 nennt „Pipeline grün auf `main`“, im Repo existiert nur `master`; `HANDOFF.md` nennt `master`, Workflow deckt beide ab. Kein Defekt, aber Doku-Abweichung; empfehlenswert `PLAN.md` auf `master` zu korrigieren.
 
 ## 4. Human-Gate-1-Checkliste
 
-| Prüfpunkt | Befund | Freigabe? |
-|---|---|---|
-| **Schema** (Datenmodell §4.1) | 10 Tabellen, 18 Indizes, 19 Trigger, UUIDv7-Checks ohne DB-Default, `updated_at`-Trigger, Soft-Delete-Sperre; pgTAP 45/45 grün. Seed-Zählung 13/389/13 idempotent. | **ja, mit Auflage D1** (Seed im Stack nachweisen) |
-| **RLS-Konzept** (§4.5) | 40 Policies (10 Tabellen × 4 Operationen), RLS auf allen 10 Tabellen aktiv; Rollenfälle per pgTAP belegt. Aber: kein `ARCHITECTURE.md`-Konzeptdokument; RLS-Begründung nur in Migration/DECISIONS verstreut. | **nein, bis D2 behoben** |
-| **Wireframes** (T1.6b) | Drei Low-Fi-Skizzen (Liste, Rezept/Portionsrechner, Import-Vorschau), Kerninteraktionen beschriftet (Hinzufügen ≤2 Taps, Abhaken 1 Tap), Zustände, Tap-Bilanz, offene PO-Punkte. | **ja** |
+| Prüfpunkt                     | Befund                                                                                                                                                                                                       | Freigabe?                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| **Schema** (Datenmodell §4.1) | 10 Tabellen, 18 Indizes, 19 Trigger, UUIDv7-Checks ohne DB-Default, `updated_at`-Trigger, Soft-Delete-Sperre; pgTAP 45/45 grün. Seed-Zählung 13/389/13 idempotent.                                           | **ja, mit Auflage D1** (Seed im Stack nachweisen) |
+| **RLS-Konzept** (§4.5)        | 40 Policies (10 Tabellen × 4 Operationen), RLS auf allen 10 Tabellen aktiv; Rollenfälle per pgTAP belegt. Aber: kein `ARCHITECTURE.md`-Konzeptdokument; RLS-Begründung nur in Migration/DECISIONS verstreut. | **nein, bis D2 behoben**                          |
+| **Wireframes** (T1.6b)        | Drei Low-Fi-Skizzen (Liste, Rezept/Portionsrechner, Import-Vorschau), Kerninteraktionen beschriftet (Hinzufügen ≤2 Taps, Abhaken 1 Tap), Zustände, Tap-Bilanz, offene PO-Punkte.                             | **ja**                                            |
 
 ## 5. Urteil je Aufgabe
 
-| Aufgabe | Urteil | Begründung (knapp) |
-|---|---|---|
-| **T1.1** | **bestanden** | Frischer Clone: install 17.6 s; lint/typecheck/test/build alle exit 0; Husky aktiv. DoD-Checkbox offen (D5). |
-| **T1.2** | **bestanden** | `actionlint` exit 0; GitHub-Runs 40182149307 (cd95b4d) und 40187777526 (00f656c) `conclusion: success`. DoD-Checkbox offen (D5). |
-| **T1.3** | **nicht bestanden** | Config/Images/Caddyfile statisch ok, aber `docker compose up`, Caddy-Build, gültiges Zertifikat und HTTPS-`/health` sind nicht nachgewiesen (D3). |
-| **T1.4** | **bestanden** | pgTAP 45/45, RLS auf 10 Tabellen, 40 Policies, 19 Trigger, UUIDv7/Soft-Delete belegt. |
-| **T1.5** | **nicht bestanden** | Seed selbst grün/idempotent (13/389/13), aber `supabase db reset` fehlt `config.toml`; Compose mountet `seed.sql` nicht → AK wörtlich nicht erfüllt (D1/D4). |
-| **T1.6** | **nicht bestanden** | `ARCHITECTURE.md` fehlt; T1.6b Wireframes und `DECISIONS.md` sind dagegen erfüllt (D2). |
-| **T1.7** | **bestanden** | Backup real: Exit 0, gzip-valid, 9578 Byte; README 5 Schritte, `.env.example`, Cron-Beispiel, `backups/` gitignored. Startpfad nur statisch geprüft (abhängig von T1.3); DoD-Checkbox offen (D5). |
+| Aufgabe  | Urteil              | Begründung (knapp)                                                                                                                                                                                |
+| -------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **T1.1** | **bestanden**       | Frischer Clone: install 17.6 s; lint/typecheck/test/build alle exit 0; Husky aktiv. DoD-Checkbox offen (D5).                                                                                      |
+| **T1.2** | **bestanden**       | `actionlint` exit 0; GitHub-Runs 40182149307 (cd95b4d) und 40187777526 (00f656c) `conclusion: success`. DoD-Checkbox offen (D5).                                                                  |
+| **T1.3** | **nicht bestanden** | Config/Images/Caddyfile statisch ok, aber `docker compose up`, Caddy-Build, gültiges Zertifikat und HTTPS-`/health` sind nicht nachgewiesen (D3).                                                 |
+| **T1.4** | **bestanden**       | pgTAP 45/45, RLS auf 10 Tabellen, 40 Policies, 19 Trigger, UUIDv7/Soft-Delete belegt.                                                                                                             |
+| **T1.5** | **nicht bestanden** | Seed selbst grün/idempotent (13/389/13), aber `supabase db reset` fehlt `config.toml`; Compose mountet `seed.sql` nicht → AK wörtlich nicht erfüllt (D1/D4).                                      |
+| **T1.6** | **nicht bestanden** | `ARCHITECTURE.md` fehlt; T1.6b Wireframes und `DECISIONS.md` sind dagegen erfüllt (D2).                                                                                                           |
+| **T1.7** | **bestanden**       | Backup real: Exit 0, gzip-valid, 9578 Byte; README 5 Schritte, `.env.example`, Cron-Beispiel, `backups/` gitignored. Startpfad nur statisch geprüft (abhängig von T1.3); DoD-Checkbox offen (D5). |
 
 ## 6. Gesamturteil
 
@@ -383,18 +389,31 @@ Keine Regression: Alle vier Gates exit 0, die CI ist auf beiden Fix-Commits grü
 
 ### 7.3 Urteil je Aufgabe (Re-Abnahme)
 
-| Aufgabe | Urteil | Begründung (knapp) |
-|---|---|---|
-| **T1.1** | **bestanden** | `pnpm lint/typecheck/test/build` je exit 0; CI grün. |
-| **T1.2** | **bestanden** | Check-runs `2ce3b5d` und `f918ede`: „Lint, Typecheck, Test, Build“ completed success; AK nennt `master`. |
-| **T1.3** | **nicht bestanden (offen, D3)** | Statisch gültig (Compose-Config exit 0, 5 Dienste, Seed-Mount); Laufzeit-/HTTPS-Nachweis ohne Docker-Daemon nicht möglich. Kein neuer Defekt, hostabhängiger offener Punkt. |
-| **T1.4** | **bestanden** | Auf frischer DB erneut: pgTAP 45/45 ok, 0 Fehler; RLS/Trigger unverändert grün. |
-| **T1.5** | **bestanden** | Frische DB: 13 Kategorien/389 Regeln/13 Einheiten; zweiter Seed-Lauf idempotent; `config.toml` + Seed-Mount konsistent. Wörtlicher `supabase db reset`-Lauf bleibt host-offen (D3). |
-| **T1.6** | **bestanden** | `ARCHITECTURE.md`, `DECISIONS.md`, `wireframes.md` vorhanden; ARCH verweist auf PLAN §4.1–4.5, keine Widersprüche; Checkbox in dieser Runde abgehakt. |
-| **T1.7** | **bestanden** | README 5 Schritte, `.env.example` vollständig; Backup real: Exit 0, gzip-valid, 55.890 Byte. |
+| Aufgabe  | Urteil                          | Begründung (knapp)                                                                                                                                                                  |
+| -------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **T1.1** | **bestanden**                   | `pnpm lint/typecheck/test/build` je exit 0; CI grün.                                                                                                                                |
+| **T1.2** | **bestanden**                   | Check-runs `2ce3b5d` und `f918ede`: „Lint, Typecheck, Test, Build“ completed success; AK nennt `master`.                                                                            |
+| **T1.3** | **nicht bestanden (offen, D3)** | Statisch gültig (Compose-Config exit 0, 5 Dienste, Seed-Mount); Laufzeit-/HTTPS-Nachweis ohne Docker-Daemon nicht möglich. Kein neuer Defekt, hostabhängiger offener Punkt.         |
+| **T1.4** | **bestanden**                   | Auf frischer DB erneut: pgTAP 45/45 ok, 0 Fehler; RLS/Trigger unverändert grün.                                                                                                     |
+| **T1.5** | **bestanden**                   | Frische DB: 13 Kategorien/389 Regeln/13 Einheiten; zweiter Seed-Lauf idempotent; `config.toml` + Seed-Mount konsistent. Wörtlicher `supabase db reset`-Lauf bleibt host-offen (D3). |
+| **T1.6** | **bestanden**                   | `ARCHITECTURE.md`, `DECISIONS.md`, `wireframes.md` vorhanden; ARCH verweist auf PLAN §4.1–4.5, keine Widersprüche; Checkbox in dieser Runde abgehakt.                               |
+| **T1.7** | **bestanden**                   | README 5 Schritte, `.env.example` vollständig; Backup real: Exit 0, gzip-valid, 55.890 Byte.                                                                                        |
 
 ### 7.4 Gesamturteil der Re-Abnahme
 
 **bestanden unter Vorbehalt.**
 
 Die Defekte D1/D4 und D2/D5/D6 sind behoben; die Welle-1-Substanz ist damit Gate-1-fähig. Einziger offener Punkt bleibt **T1.3/D3**: der Laufzeitnachweis von `docker compose up --build`, Caddy-Build, gültigem Zertifikat, HTTPS-`/health` und dem wörtlichen `supabase db reset` auf einem Docker-Host. Gemäß Aufgabenstellung ist das kein Gate-1-Blocker, sondern ein dokumentierter offener Punkt; die Checkbox T1.3 bleibt bis zum Host-Nachweis offen.
+
+### 7.5 Nachtrag D3 — erneute Machbarkeitsprüfung (DevOps, 2026-10-25)
+
+Ergänzend zu 7.2: Docker ist in dieser Sandbox **nicht installierbar**, nicht nur „nicht laufend“. Belege: `uid=10000(hermes)`, kein `sudo`, `CapEff=0000000000000000`, `unshare -Ur` → `Operation not permitted`, `/var/lib/dpkg` und `/usr/bin` nicht schreibbar, kein Socket unter `/var/run`, `/run`, `/run/user/10000`. Damit sind Docker-CE und rootless Podman ausgeschlossen; ein weiterer Retry in derselben Umgebung ist zwecklos (Capability-Block, Details in `docs/DECISIONS.md`, Eintrag „D3 erneut geprüft“).
+
+Ohne Docker dennoch real belegt:
+
+- `docker compose config --quiet` → Exit 0, fünf Dienste, Seed-Mount korrekt.
+- Caddy 2.11.7 (Stock-Binary) mit `tls internal` statt DNS-Modul (Ports 8443/8080): `caddy validate` → „Valid configuration“; Start ok; Zertifikat von „Caddy Local Authority“; `curl --resolve … https://…:8443/health` → **HTTP/2 200**, Body `ok`; `/rest/v1/` → **502** (`lookup rest on 127.0.0.11:53`) — Routing greift, nur Docker-DNS fehlt.
+- Portable PostgreSQL 18.6.1 + Supabase-Shim: Migrationen 001–003 + Seed mit `ON_ERROR_STOP=1` fehlerfrei; `categories=13`, `category_rules=389`; zweiter Seed-Lauf `INSERT 0 0` (idempotent).
+- Echtes LE-Zertifikat mit ipv64-Platzhaltern nicht möglich; das Caddyfile benötigt `dns.providers.lego_deprecated`, das nur der `xcaddy`-Build im Image liefert (Stock-Binary: „module not registered“).
+
+**D3 bleibt offen** und wird als Capability-Block geführt; der Host-Lauf (`docker compose up -d --build`, 5× healthy, `curl https://<domain>/health`, `supabase db reset`) ist auf einem Docker-Host bzw. `docker:dind`-Runner nachzuholen.

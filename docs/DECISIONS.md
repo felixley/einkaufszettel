@@ -76,3 +76,53 @@ Format je Eintrag: Datum, Entscheidung, Begründung, Alternative, Risiko/Status.
     Konfiguration.
     Offen: Laufzeitnachweis `docker compose up` bzw. `supabase db reset` auf
     einem Docker-Host.
+
+## 2026-10-25 — D3 erneut geprüft: Docker hier nicht installierbar (Capability-Block)
+
+- **Entscheidung:** Der Docker-Laufzeitnachweis (T1.3/D3) wird in dieser
+  Sandbox **nicht** erneut versucht. Die Aufgabe wird mit `kind=capability`
+  blockiert; ein weiterer Retry in derselben Umgebung ist zwecklos.
+- **Begründung (gemessen, nicht vermutet):** Der Docker-Client ist vorhanden
+  (26.1.5+dfsg1, Compose v5.6.1), aber es gibt keinen erreichbaren Daemon:
+  `/var/run/docker.sock` fehlt, `docker info` scheitert mit „Cannot connect
+  to the Docker daemon“. Eine Installation ist ausgeschlossen: Ausführung als
+  `uid=10000(hermes)`, kein `sudo`, `CapEff=0000000000000000`,
+  `unshare -Ur` → `Operation not permitted` (User-Namespaces gesperrt),
+  `/var/lib/dpkg` und `/usr/bin` nicht schreibbar. `apt-get install --dry-run`
+  löst nur auf; ein echter Install scheitert an fehlenden Root-Rechten.
+  Damit sind weder Docker-CE noch rootless Podman lauffähig.
+- **Teilnachweise, die ohne Docker real erbracht wurden:**
+  1. `docker compose config --quiet` → Exit 0 (Compose-Datei syntaktisch
+     gültig, 5 Dienste, Seed-Mount korrekt).
+  2. Caddy 2.11.7 (Stock-Binary) mit einer Test-Variante des Caddyfiles
+     (`tls internal` statt `tls { dns lego_deprecated ipv64 }`, Ports
+     8443/8080, `admin off`): `caddy validate` → „Valid configuration“,
+     Start erfolgreich, Zertifikat von „Caddy Local Authority“ ausgestellt,
+     `curl --resolve … https://…:8443/health` → **HTTP/2 200, Body `ok`**.
+     Proxied Pfad `/rest/v1/` → **502** mit
+     `dial tcp: lookup rest on 127.0.0.11:53: server misbehaving` — belegt,
+     dass das Routing greift und nur die Docker-DNS-Auflösung fehlt.
+  3. Portable PostgreSQL 18.6.1 (theseus-rs-Binaries) + Supabase-Shim
+     (`auth`-Schema, `auth.users`, `auth.uid()`, Rollen
+     `anon`/`authenticated`/`service_role`): Migrationen 001–003 und Seed
+     liefen mit `ON_ERROR_STOP=1` fehlerfrei; `select count(*) from
+public.categories` → **13**, `category_rules` → **389**; zweiter
+     Seed-Lauf → `INSERT 0 0`, Count bleibt 13 (idempotent).
+  4. Gegenprobe „echtes LE-Zertifikat“: mit den ipv64-Platzhalterwerten
+     (`DOMAIN`, `IPV64_API_KEY`) nicht möglich. Das Caddyfile verlangt das
+     DNS-Modul `dns.providers.lego_deprecated`, das nur der
+     `xcaddy`-Build im `caddy/Dockerfile` liefert; das Stock-Binary meldet
+     „module not registered“. DNS-01 gegen ipv64 ist daher erst mit echten
+     Zugangsdaten und Domain auf einem Docker-Host testbar.
+- **Alternative:** Laufzeitnachweis auf einem Host mit laufendem
+  Docker-Daemon (oder CI-Runner mit `docker:dind`): `docker compose up -d
+--build`, 5 Dienste `healthy`, `curl https://$DOMAIN/health` → `{"status":
+"ok"}`, danach `supabase db reset` mit echtem Domain-/DNS-Setup.
+- **Risiko/Status:** D3 bleibt **offen**; alle übrigen Teile sind lokal
+  belegt. Risiko der Nichtprüfung: Build-Fehler im xcaddy-Image oder
+  Compose-Startfehler (Volumes/Healthchecks) blieben bis zum Host-Lauf
+  unentdeckt. Die Caddy-Konfiguration selbst ist validiert; der 502-Fall
+  ist erwartet und kein Defekt. Shim/Testartefakte liegen außerhalb des
+  Repos unter
+  `/opt/data/profiles/devops/cache/scratch/d3/` (`prelude.sql`,
+  `Caddyfile.start`, portable PG-Binaries).
