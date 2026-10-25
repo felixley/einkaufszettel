@@ -30,6 +30,7 @@ die Abnahme, entscheidet aber nicht.
 ## Welle 1 — DevOps (`devops`) · Karte `t_129c433d` (neu zu schneiden)
 
 ### T1.1 Monorepo + Tooling
+
 - **Ziel:** pnpm-Workspace-Monorepo mit `apps/web`, `packages/core`, `supabase/`;
   TypeScript strict, ESLint, Prettier, Vitest, Husky.
 - **Akzeptanzkriterium:** `pnpm lint && pnpm typecheck && pnpm test` läuft grün (frischer
@@ -43,6 +44,7 @@ die Abnahme, entscheidet aber nicht.
 - **Offene Fragen:** pnpm-Version — Entscheidung: `packageManager` auf pnpm 9 pinnen.
 
 ### T1.2 CI
+
 - **Ziel:** GitHub Actions CI mit lint, typecheck, test, build.
 - **Akzeptanzkriterium:** Pipeline grün auf `master`; YAML lokal via `actionlint`
   geprüft (Output im Review).
@@ -53,6 +55,7 @@ die Abnahme, entscheidet aber nicht.
 - **Offene Fragen:** Keine.
 
 ### T1.3 Docker Compose + HTTPS (Caddy, ipv64 DNS-01)
+
 - **Ziel:** Compose-Stack aus reduziertem self-hosted Supabase, Next.js und Caddy mit
   HTTPS über ipv64.net (DNS-01); Healthcheck.
 - **Akzeptanzkriterium:** `docker compose up` startet alles; App unter
@@ -69,6 +72,7 @@ die Abnahme, entscheidet aber nicht.
   Renewal-Dry-Run dokumentieren.
 
 ### T1.7 Setup-Doku, `.env.example`, Backup
+
 - **Ziel:** README-Setup in max. 5 Schritten, `.env.example`, `scripts/backup.sh` +
   Cron-Beispiel.
 - **Akzeptanzkriterium:** Frischer Checkout startet anhand README in ≤ 5 Schritten;
@@ -83,6 +87,7 @@ die Abnahme, entscheidet aber nicht.
 ## Welle 1 — Backend (`backend`) · Karte `t_ebc6addd` (neu zu schneiden)
 
 ### T1.4 Migrationen Datenmodell + RLS
+
 - **Ziel:** Migrationen für das Datenmodell aus `PLAN.md` §4.1 (profiles, households,
   household_members, invites, lists, list_items, categories, category_rules, recipes,
   recipe_ingredients) inkl. Trigger, Indizes und RLS-Policies.
@@ -97,6 +102,7 @@ die Abnahme, entscheidet aber nicht.
   Bund, Dose, Packung, Zehe, Prise, n. B.) — Abweichung nur mit PO klären.
 
 ### T1.5 Seed
+
 - **Ziel:** Seed für Kategorien (§4.4), Keyword-Regeln (≈ 300 deutsche Begriffe) und
   Einheiten.
 - **Akzeptanzkriterium:** `supabase db reset` liefert lauffähige Basisdaten; Zählabfrage
@@ -109,6 +115,7 @@ die Abnahme, entscheidet aber nicht.
 ## Welle 1 — Architect (`architect`, Selbstauftrag)
 
 ### T1.6a Architektur- und Entscheidungsdoku
+
 - **Ziel:** `docs/ARCHITECTURE.md` und `docs/DECISIONS.md` (u. a. Caddy-Variante A/B,
   LWW-Sync, Einheiten-Taxonomie).
 - **Akzeptanzkriterium:** Beide Dateien existieren, verweisen auf `PLAN.md` §4 und halten
@@ -121,6 +128,7 @@ die Abnahme, entscheidet aber nicht.
 ## Welle 1 — Frontend (`frontend`) · Karte `t_adcb479b` (neu zu schneiden)
 
 ### T1.6b Wireframes
+
 - **Ziel:** Low-Fi-Skizzen für Liste, Rezept und Import-Dialog in `docs/wireframes.md`.
 - **Akzeptanzkriterium:** Drei Skizzen mit Beschriftung der Kerninteraktionen
   (Hinzufügen ≤ 2 Taps, Abhaken, Import-Vorschau); im Human Gate 1 vorzeigbar.
@@ -158,6 +166,7 @@ die Abnahme, entscheidet aber nicht.
 ## Welle 2 — Backend (`backend`) · T2.2 Backend-Anteil (Liste/Haushalt)
 
 ### T2.2 Haushalt + Standardliste + Listen-CRUD (RPC/RLS)
+
 - **Status Backend:** **fertig** (Migrationen + pgTAP). Der **UI-Anteil** (Onboarding-
   Dialog „Haushalt anlegen“, Listen-Umschalter, Undo nach Soft-Delete, E2E-Nachweis
   A-2 mit zwei Browser-Kontexten) liegt bei `frontend`; die Checkbox in `PLAN.md`
@@ -202,6 +211,72 @@ die Abnahme, entscheidet aber nicht.
      „leer“ sauber zu 0 Zeilen (PostgREST: leeres Array, `.maybeSingle()` → null).
 - **Offene Fragen:** Keine. Frontend kann die RPCs direkt über
   `supabase.rpc(...)` ansprechen; `get_list`/`list_lists` liefern Arrays.
+
+---
+
+## Welle 2 — Backend (`backend`) · Karte `t_0d433806` (T2.3 + T2.4)
+
+### T2.3 Einladung Link/QR · T2.4 Mitgliederverwaltung (RPC/RLS)
+
+- **Status Backend:** **fertig** (Migrationen + pgTAP). Der **UI-Anteil**
+  (`apps/web`: Einladungsdialog mit Rollenwahl, QR-Rendering via `qrcode`,
+  Widerruf-Liste, Mitgliederliste mit Rollenwechsel/Entfernen/Austritt sowie
+  der E2E-Nachweis A-3/A-4 mit zwei Browser-Kontexten) liegt bei `frontend`.
+  Die Checkboxen T2.3/T2.4 in `PLAN.md` bleiben deshalb offen, bis beide
+  Anteile zusammen abgenommen sind (gleiche Konvention wie T2.2).
+- **Gelieferte Pfade:**
+  - `supabase/migrations/20261025_005_invites_and_members.sql` — 8 öffentliche
+    RPCs (`create_invite`, `revoke_invite`, `list_household_invites`,
+    `check_invite`, `accept_invite`, `change_member_role`, `remove_member`,
+    `leave_household`) + 5 interne Helfer im Schema `internal`.
+  - `supabase/migrations/20261025_006_fix_household_members_rls.sql` —
+    RLS-Fix für Soft-Delete auf `household_members`.
+  - `supabase/tests/03_invites_and_members.sql` — 77 pgTAP-Tests.
+  - `supabase/tests/run_local_verify.sh` — um Migrationen 005/006 und Suite 03
+    erweitert; prüft jetzt zusätzlich die Ausgabe auf rote pgTAP-Assertions
+    (`psql -f` liefert sonst Exit 0 trotz Fehlschlägen).
+  - `docs/TESTLOG-T2.3-T2.4.md` — Testnachweis inkl. Negativkontrolle.
+- **Akzeptanzkriterien (belegt):**
+  - **A-3:** Einladung nur als Owner anlegbar/widerrufbar; Einlösung per
+    Token-Hash legt die Mitgliedschaft mit der gewählten Rolle an (Editor kann
+    danach schreiben); Replay ist idempotent und verbraucht keine zweite
+    Nutzung; abgelaufene/widerrufene/aufgebrauchte Links werden mit
+    unterscheidbaren Fehlern abgelehnt; `check_invite` zeigt den Status ohne
+    Verbrauch.
+  - **A-4:** Rollenwechsel wirkt sofort auf das Schreibrecht (RLS liest die
+    Rolle live); Entfernen (Soft-Delete) entzieht Lese- und Schreibzugriff;
+    **letzter Owner kann nicht austreten** (auch nicht herabgestuft/entfernt
+    werden); mit zweitem Owner sind Austritt und Selbst-Herabstufung möglich,
+    `households.owner_id` wird umgehängt (kein Owner-Leak über die
+    `households_select`-Policy).
+- **Test-Nachweis:** kompletter Lauf auf frischer PostgreSQL-16.2-Instanz
+  (Supabase-Shim + pgTAP): Basisschema 001/002 einmalig, funktionale
+  Migrationen 003–006 je **zweimal** (Idempotenz), Seed zweimal, danach alle
+  Suiten: `01_rls` 45/45 ok, `02_rpc_household_lists` 62/62 ok,
+  `03_invites_and_members` 77/77 ok = **184 ok, 0 Fehlschläge**.
+  Reproduzierbar aus dem Repo mit
+  `PGROOT=<pg-shim> bash supabase/tests/run_local_verify.sh` (Exit 0 = grün).
+- **Technische Entscheidungen (Begründung in den Migrationsköpfen):**
+  1. **Token nur als Hash:** Der Client erzeugt den Roh-Token (≥ 128 Bit) und
+     übergibt ausschließlich den Hash an `create_invite`; der Roh-Token bleibt
+     beim Client für Link/QR. Kein Server-Wissen über den Token.
+  2. **Zwei interne Definer-Helfer** (`internal.accept_invite`,
+     `internal.leave_household`) sind eine bewusste, dokumentierte Abweichung
+     vom INVOKER-Grundsatz: der Eingeladene darf `invites`/`household_members`
+     nicht per RLS beschreiben, und Editor/Viewer dürfen ihre eigene
+     Mitgliedszeile nicht soft-löschen. Beide Helfer liegen im Schema
+     `internal` (nicht per PostgREST exponiert), nehmen nie eine fremde
+     User-ID entgegen und arbeiten mit `auth.uid()`; die Tokenprüfung
+     (Widerruf/Ablauf/Auslastung) ist dort explizit implementiert. Alle
+     anderen RPCs bleiben `SECURITY INVOKER`.
+  3. **RLS-Fix 006** (analog 004): Owner dürfen soft-gelöschte
+     Mitgliedszeilen sehen, sonst scheitert das Soft-Delete an der
+     SELECT-USING-Klausel, die PostgreSQL bei UPDATE auf die neue Zeile
+     anwendet.
+- **Offene Fragen:** Keine. Das Frontend spricht die RPCs über
+  `supabase.rpc(...)` an; `accept_invite`/`check_invite` liefern `jsonb`
+  (`role`, `household_id`, `household_name`, `remaining_uses`, …),
+  `change_member_role` liefert die geänderte Mitgliedszeile.
 
 ---
 

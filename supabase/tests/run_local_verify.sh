@@ -60,15 +60,17 @@ say "3. pgTAP laden"
 echo ok
 
 # 001/002 sind Basisschema-Migrationen (CREATE TYPE/TABLE/TRIGGER) und laufen
-# genau einmal pro Datenbank. 003/004 sind funktionale Migrationen und muessen
+# genau einmal pro Datenbank. 003-006 sind funktionale Migrationen und muessen
 # idempotent sein (CREATE OR REPLACE / DROP IF EXISTS) — sie laufen zweimal.
 say "4a. Basisschema 001 + 002 (einmalig)"
 run_sql "$REPO/supabase/migrations/20261025_001_schema.sql" "Migration 001_schema" || exit 1
 run_sql "$REPO/supabase/migrations/20261025_002_rls.sql"    "Migration 002_rls"    || exit 1
 
-say "4b. Funktionale Migrationen 003 + 004 (je zweimal = Idempotenz)"
+say "4b. Funktionale Migrationen 003-006 (je zweimal = Idempotenz)"
 for m in 20261025_003_rpc_household_lists.sql \
-         20261025_004_fix_lists_rls.sql; do
+         20261025_004_fix_lists_rls.sql \
+         20261025_005_invites_and_members.sql \
+         20261025_006_fix_household_members_rls.sql; do
   run_sql "$REPO/supabase/migrations/$m" "Migration $m (1. Lauf)" || exit 1
   run_sql "$REPO/supabase/migrations/$m" "Migration $m (2. Lauf = Idempotenz)" || exit 1
 done
@@ -77,18 +79,27 @@ say "5. Seed (idempotent, zweimal)"
 run_sql "$REPO/supabase/seed.sql" "Seed (1. Lauf)" || exit 1
 run_sql "$REPO/supabase/seed.sql" "Seed (2. Lauf = Idempotenz)" || exit 1
 
-say "6. pgTAP 01_rls"
-"$PSQL" -h "$SOCK" -p "$PORT" -U "$DBUSER" -d "$DB" -f "$REPO/supabase/tests/01_rls.sql"
-rc1=$?
-echo "--> exit=$rc1"
+# psql -f liefert bei SQL-Fehlern ohne ON_ERROR_STOP Exit 0. Deshalb wird die
+# Ausgabe zusaetzlich auf pgTAP-Failures ("not ok"/"# Failed test") und auf
+# SQL-Fehler ("ERROR:") geprueft — sonst meldet der Lauf faelschlich gruen.
+RC=0
+n=6
+for t in 01_rls 02_rpc_household_lists 03_invites_and_members; do
+  say "$n. pgTAP $t"
+  LOG="/tmp/ez_verify_${t}.log"
+  "$PSQL" -h "$SOCK" -p "$PORT" -U "$DBUSER" -d "$DB" -f "$REPO/supabase/tests/$t.sql" > "$LOG" 2>&1
+  rc=$?
+  cat "$LOG"
+  echo "--> exit=$rc"
+  if [ "$rc" -ne 0 ] || grep -qE '^[[:space:]]*(not ok|# Failed test)|^psql:.*ERROR:' "$LOG"; then
+    echo "!!!! FEHLSCHLAEGE in $t !!!!" >&2
+    RC=1
+  fi
+  n=$((n + 1))
+done
 
-say "7. pgTAP 02_rpc_household_lists"
-"$PSQL" -h "$SOCK" -p "$PORT" -U "$DBUSER" -d "$DB" -f "$REPO/supabase/tests/02_rpc_household_lists.sql"
-rc2=$?
-echo "--> exit=$rc2"
-
-say "8. Ergebnis"
-if [ "$rc1" -eq 0 ] && [ "$rc2" -eq 0 ]; then
+say "9. Ergebnis"
+if [ "$RC" -eq 0 ]; then
   echo "ALLE TESTS GRUEN"
   exit 0
 fi

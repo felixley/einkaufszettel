@@ -155,3 +155,51 @@ public.categories` → **13**, `category_rules` → **389**; zweiter
   verwaisten `next-server` belegt); Browser-Pfad wird in
   `playwright.config.ts` auf `~/.cache/ms-playwright` korrigiert, falls
   `PLAYWRIGHT_BROWSERS_PATH` auf ein leeres Verzeichnis zeigt.
+
+## 2026-10-25 — T2.3/T2.4: Invite-Token als Hash, zwei interne Definer-Helfer, RLS-Fix fuer Mitglieder
+
+- **Entscheidung 1 — Token nur als Hash:** Der Client erzeugt den Einladungs-
+  Token (>= 128 Bit Zufall) und ruft `create_invite` ausschliesslich mit dem
+  **Hash** auf; der Roh-Token bleibt beim Client und wird fuer Link und QR
+  (`qrcode`) verwendet. Der Server kennt den Roh-Token nie.
+- **Entscheidung 2 — zwei interne SECURITY-DEFINER-Helfer:** Die Einloesung
+  einer Einladung (`internal.accept_invite`) und das Verlassen eines Haushalts
+  (`internal.leave_household`) koennen nicht ueber RLS abgebildet werden: der
+  Eingeladene ist kein Owner (darf `invites`/`household_members` nicht
+  schreiben) und Editor/Viewer duerfen ihre eigene Mitgliedszeile nicht selbst
+  soft-loeschen (`household_members_update` ist Owner-only). Beide Helfer
+  liegen im Schema `internal` (nicht per PostgREST exponiert), nehmen **nie**
+  eine fremde User-ID entgegen (arbeiten mit `auth.uid()`) und implementieren
+  die Tokenpruefung (Widerruf/Ablauf/Auslastung) bzw. die
+  Letzter-Owner-Regel explizit. Alle anderen RPCs der Migration bleiben
+  `SECURITY INVOKER`; pgTAP prueft fuer die oeffentlichen Funktionen
+  `prosecdef = false`.
+- **Begruendung:** Ohne diese Helfer waeren Invite-Einloesung und Austritt
+  entweder unmoeglich oder nur durch eine RLS-Policy abbildbar, die einem
+  Mitglied erlauben wuerde, seine eigene Rolle zu aendern
+  (Privilegien-Eskalation Viewer->Owner). Alternative „alles SECURITY DEFINER"
+  verwirft die RLS-Durchsetzung fuer die Mehrheit der Pfade; verworfen.
+- **Entscheidung 3 — Letzter-Owner-Regel und `households.owner_id`:** Es bleibt
+  immer mindestens ein aktiver Owner. Beim Verlassen/Entfernen/Herabstufen
+  eines Owners wird `households.owner_id` auf einen verbleibenden aktiven Owner
+  umgehaengt, sonst behielte der ausgeschiedene Nutzer ueber die
+  `households_select`-Policy (`owner_id = auth.uid()`) weiterhin Einblick in
+  den Haushalt, obwohl seine Mitgliedschaft entfernt wurde.
+- **Entscheidung 4 — RLS-Fix 006:** `household_members_select` erlaubt Ownern
+  den Blick auf soft-geloeschte Mitgliedszeilen. Grund: PostgreSQL wendet die
+  USING-Klausel der SELECT-Policy bei `UPDATE` zusaetzlich auf die NEUE Zeile
+  an; mit `deleted_at IS NULL` scheiterte jedes `remove_member` an „new row
+  violates row-level security policy". Identischer Mechanismus wie beim
+  `lists`-Fix in Migration 004; Editor/Viewer sehen weiterhin nur aktive
+  Mitglieder, Nichtmitglieder nichts.
+- **Entscheidung 5 — Fehler-Transparenz bei Einladungen:** unbekannter Token
+  `P0002` („nicht gefunden"), abgelaufen/widerrufen/aufgebraucht `22023` mit
+  jeweils eigener Meldung. Der AK „abgelaufener Link wird abgelehnt" verlangt
+  eine unterscheidbare Meldung; der Besitzer des Tokens kennt das Geheimnis
+  ohnehin, ein Existenz-Orakel ist damit nicht verbunden. Fuer das Widerrufen
+  durch Nicht-Owner bleibt es bei der Konvention aus Migration 003 („keine
+  Berechtigung" und „nicht gefunden" teilen denselben Fehler, kein Orakel).
+- **Risiko/Status:** Belegt durch pgTAP-Suite `03_invites_and_members.sql`
+  (77/77) und den Gesamtlauf 184/184 (`docs/TESTLOG-T2.3-T2.4.md`).
+  Das Frontend erzeugt Token, Link und QR clientseitig; fuer die
+  Rate-Limiting-Anforderung aus PLAN.md §4.5 bleibt Caddy zustaendig (T1.3).
