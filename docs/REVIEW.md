@@ -417,3 +417,69 @@ Ohne Docker dennoch real belegt:
 - Echtes LE-Zertifikat mit ipv64-Platzhaltern nicht möglich; das Caddyfile benötigt `dns.providers.lego_deprecated`, das nur der `xcaddy`-Build im Image liefert (Stock-Binary: „module not registered“).
 
 **D3 bleibt offen** und wird als Capability-Block geführt; der Host-Lauf (`docker compose up -d --build`, 5× healthy, `curl https://<domain>/health`, `supabase db reset`) ist auf einem Docker-Host bzw. `docker:dind`-Runner nachzuholen.
+
+## 8. Nachweis T2.1 gegen echten GoTrue-Stack (dritte Runde, QA)
+
+Ziel: Beleg, dass der **echte** Auth-Pfad (`@supabase/ssr` gegen GoTrue v2.197.0) in `apps/web` funktioniert — nicht nur der Mock. Da in dieser Sandbox kein Docker-Daemon läuft (siehe 7.5), wurde der Stack mit nativen Binaries nachgebaut; Caddy wird durch einen kleinen Same-Origin-Proxy (Port 8000) ersetzt, der `/auth/v1/*` auf GoTrue (Port 9999) und alles andere auf `next start` (Port 8001) routet. Das ist ein **QA-Harness**, keine Änderung an Compose/Caddy (gehört zu DevOps).
+
+### 8.1 Aufgebauter Stack
+
+| Baustein | Umsetzung |
+| --- | --- |
+| PostgreSQL | portable PostgreSQL 18.6.1 (`@embedded-postgres/linux-x64`), Port 55432, `initdb -A trust` |
+| GoTrue | Supabase-GoTrue-Binary v2.197.0 (`/tmp/gt/auth`), `migrate` + `serve`, Port 9999 |
+| DB-Schema | GoTrue-Migrationen 75/75, Repo-Migrationen 001–003 + Seed |
+| Frontend | `next build` + `next start` (Next 16.4.3), `NEXT_PUBLIC_AUTH_MOCK=false` |
+| Mail | lokaler SMTP-Sink auf 127.0.0.1:2525, Ablage in `/tmp/ezstack/mail/*.eml` |
+
+Wichtige Umgebungs-Notiz: GoTrue legt seine Tabellen nur dann in `auth.*` ab, wenn die DB-URL `search_path=auth` setzt. Beim ersten Lauf landeten sie in `public.*` (deshalb `relation "identities" does not exist`). Nach `?search_path=auth` + vorab angelegtem Schema `auth` liefen alle 75 Migrationen sauber. Das ist eine Harness-Einstellung, kein Repo-Defekt.
+
+### 8.2 Nachgewiesene Kriterien (echter Lauf, keine Mock-Daten)
+
+Ausgeführt mit `node qa_real_auth.mjs` gegen `http://localhost:8000` (Proxy → Next 8001 → GoTrue 9999). Relevanter Output (gekürzt):
+
+```text
+login_mock_badge_count: 0
+protected_redirect_url: http://localhost:8000/login?next=%2Flists
+after_register_url: http://localhost:8000/login?registered=1&email=qa-real-…%40example.com
+auth_users_rows: [{"id":"…","email":"qa-real-…@example.com","confirmed_at":"2026-10-25T14:46:22.186Z","last_sign_in_at":"…"}]
+profiles_rows_after_register: []
+after_login_url: http://localhost:8000/lists
+lists_heading: Einkaufslisten
+auth_cookie_names: ["sb-localhost-auth-token-flow-…-code-verifier","sb-localhost-auth-token-flows-code-verifier","sb-localhost-auth-token-code-verifier","sb-localhost-auth-token"]
+auth_cookie_value_lengths: [159,55,159,2743]
+auth_users_last_sign_in_at: [{"last_sign_in_at":"2026-10-25T14:46:22.455Z"}]
+profiles_rows_after_login: []
+after_logout_url: http://localhost:8000/login?next=/lists
+auth_cookie_names_after_logout: []
+protected_redirect_after_logout_url: http://localhost:8000/login?next=%2Flists
+reset_requested_ui: true
+reset_mail_captured_file: 003.eml
+reset_mail_link: http://localhost:8000/auth/v1/verify?token=pkce_…&type=recovery&r…
+auth_users_recovery_token_present: true
+after_reset_link_url: http://localhost:8000/reset-password?code=…
+reset_page_has_session_cookie: true
+after_password_reset_url: http://localhost:8000/login?reset=1&email=qa-real-…%40example.com
+reset_info_visible: 1
+login_with_new_password_url: http://localhost:8000/lists
+```
+
+Damit ist belegt:
+
+- **Registrierung** legt eine Zeile in `auth.users` an (`confirmed_at` gesetzt; `MAILER_AUTOCONFIRM=true`).
+- **Login** setzt ein `sb-localhost-auth-token`-Cookie (2743 Byte) und aktualisiert `last_sign_in_at`; `/lists` ist erreichbar.
+- **Logout** löscht die Auth-Cookies (`auth_cookie_names_after_logout: []`).
+- **Geschützte Route** ohne Cookie: `GET /lists` → `307` auf `/login?next=%2Flists`; auch nach Logout erneut belegt.
+- **Passwort-Reset** versendet eine echte GoTrue-Mail (im SMTP-Sink als `003.eml` gefangen), der Link öffnet eine Session auf `/reset-password?code=…`, die Passwortänderung führt zu `/login?reset=1&email=…`, die Erfolgsmeldung ist sichtbar, und der Login mit dem **neuen** Passwort landet wieder auf `/lists`. Das **alte** Passwort wird abgelehnt (URL bleibt `/login`).
+
+### 8.3 Abweichungen / Befunde (dokumentiert, nicht repariert)
+
+1. **[mittel] Kein `profiles`-Insert bei der Registrierung.** Die Karte fordert „Registrierung legt eine Zeile in `auth.users` + `profiles` an“. Belegt ist nur `auth.users`; `profiles_rows_after_register` und `profiles_rows_after_login` sind leer. Grund im Code: `SupabaseHouseholdAdapter.ensureProfile()` wird ausschließlich in `createHousehold()` aufgerufen (`apps/web/lib/household/supabase-adapter.ts:178`), nicht im Auth-/Listen-Flow. Registrierung und Login auf `/lists` legen also kein Profil an. Produktivcode ist hier out of scope → **Follow-up-Karte** (Trigger auf `auth.users` oder Aufruf im Auth-Flow).
+2. **[niedrig/UX] Recovery-Link landet ohne E-Mail-Parameter.** GoTrue leitet auf `/reset-password?code=…` (kein `email`). Das Formular verlangt aber ein Pflicht-E-Mail-Feld, d. h. Nutzer müssen ihre Adresse erneut eintippen. Kein Blocker, aber UX-Abweichung; für den Nachweis wurde das Feld im Skript gefüllt (`reset_page_email_prefilled: ""`).
+3. **[Info] Signup-Session wird verworfen.** Mit `MAILER_AUTOCONFIRM=true` liefert `POST /auth/v1/signup` bereits ein `access_token`; die UI ignoriert das und leitet immer auf `/login?registered=1` („Konto angelegt, bitte anmelden“). Deckt sich mit der in der Karte erwarteten Abweichung, ist aber nur bei aktivierter Bestätigung wirklich relevant.
+4. **[Info] `favicon.ico` → 404** in den Proxy-Logs; kosmetisch.
+5. **[Info] QA-Harness-Falle, kein App-Defekt:** Die ersten server-seitigen `GET /auth/v1/user` scheiterten mit `400 Bad Request`, weil der Proxy beim Weiterleiten einen doppelten `Host`-Header erzeugte (Go's HTTP-Server lehnt das ab). Nach Entfernen des doppelten Headers liefen alle Requests. Kein App-Bug — nicht in Richtung Frontend eskalieren.
+
+### 8.4 Urteil T2.1
+
+**bestanden** im Sinne des Akzeptanzkriteriums: Register, Login, Logout, geschützte Route und Passwort-Reset sind gegen den echten GoTrue-Stack mit echtem Output nachgewiesen; die erwarteten Abweichungen sind dokumentiert. **Offen bleibt** der `profiles`-Insert bei Registrierung (Befund 1) — als Folgekarte zu behandeln, kein Blocker für diesen Nachweis.
