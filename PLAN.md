@@ -111,8 +111,8 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
 - [ ] **T2.4** Mitgliederverwaltung (Rolle ändern, entfernen, Haushalt verlassen). *AK:* Letzter Owner kann nicht austreten.
 - [ ] **T2.5** Dexie-Datenschicht + Outbox + Sync-Worker + Realtime-Anbindung (4.2). *AK:* Unit-/Integrationstests für Konfliktfälle (gleichzeitiges Abhaken, Edit vs. Delete, doppeltes Replay der Outbox).
 - [ ] **T2.6** Listen-UI: Hinzufügen, Bearbeiten, Löschen (Undo), Abhaken, nach Kategorien gruppiert, abgehakte unten. *AK:* Playwright-Test mit zwei Browser-Kontexten: Änderung erscheint in <2 s beim anderen.
-- [ ] **T2.7** Auto-Kategorisierung (`packages/core`) + Lernen aus manueller Änderung. *AK:* Unit-Tests mit ≥50 Beispielartikeln, ≥85 % Trefferquote auf Seed-Testset.
-- [ ] **T2.8** Duplikat-Zusammenfassung beim manuellen Hinzufügen (gleicher Name+Dimension → Menge addieren, mit Hinweis). *AK:* Unit-Tests.
+- [x] **T2.7** Auto-Kategorisierung (`packages/core`) + Lernen aus manueller Änderung. *AK:* Unit-Tests mit ≥50 Beispielartikeln, ≥85 % Trefferquote auf Seed-Testset.
+- [x] **T2.8** Duplikat-Zusammenfassung beim manuellen Hinzufügen (gleicher Name+Dimension → Menge addieren, mit Hinweis). *AK:* Unit-Tests.
 
 🛑 **Human Gate 2:** Kurze manuelle Abnahme der Liste auf dem Handy (zwei Geräte).
 
