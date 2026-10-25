@@ -242,3 +242,159 @@ Das Backup-Skript wurde **real** gegen eine frische PG-Datenbank (qa_backup_veri
 **nicht bestanden.**
 
 Phase 1 ist technisch breit aufgestellt — T1.1, T1.2, T1.4 und T1.7 sind substanziell erfüllt, T1.4 sogar mit starker pgTAP-Abdeckung. Für das Human Gate 1 fehlen jedoch drei Pflichtnachweise: (1) der Laufzeitnachweis des Compose-/HTTPS-Stacks (T1.3), (2) ein funktionierender Seed-/Reset-Pfad im Stack (T1.5) und (3) das Architektur-/RLS-Konzeptdokument (T1.6a). Solange diese offen sind, ist die Abnahme nicht möglich. Empfehlung: D1/D2 vor dem Human Gate beheben, T1.3 auf einem Docker-Host nachweisen, danach erneute QA-Abnahme.
+
+## 7. Re-Abnahme nach D1/D2-Fixes (zweite Runde)
+
+- **Grundlage:** Fix-Tasks `t_f7280c28` (D1/D4: `supabase/config.toml` + Seed-Mount) und `t_903a2a61` (D2/D5/D6: `ARCHITECTURE.md`, Checkboxen, `main`→`master`); Karte `t_c51e1f55`.
+- **Geprüfter Stand:** `master` @ `f918ede` (Arbeitsbaum sauber; `f918ede` = D1/D4, `2ce3b5d` = D2/D5/D6).
+- **Umgebung:** wie §1 (kein Docker-Daemon, keine `supabase`-CLI im PATH). Zusätzlich: portable PostgreSQL 16.2 + Supabase-Kompatibilitäts-Shim, `supabase` CLI 2.122.0, Standalone-`docker-compose` v5.6.1.
+- **Rollen:** unabhängige QA; kein Produktivcode geändert. In dieser Runde nur `docs/REVIEW.md` ergänzt und die DoD-Checkbox T1.6 in `PLAN.md` nachgezogen.
+
+### 7.1 Durchgeführte Prüfungen mit echtem Output
+
+#### (1) Frische DB nach Migrationen + Seed (T1.5/D1)
+
+```text
+$ psql -h /tmp -p 55432 -U postgres -tAc "select version();"
+PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0, 64-bit
+
+$ psql ... -c "create database \"qa_reabnahme_1792929743\";"
+CREATE DATABASE
+$ psql ... -f bootstrap.sql
+SHIM_OK
+$ psql ... -f supabase/migrations/20261025_001_schema.sql   -> exit=0
+$ psql ... -f supabase/migrations/20261025_002_rls.sql      -> exit=0
+$ psql ... -f supabase/seed.sql                             -> exit=0
+
+=== COUNTS ===
+kategorien_global=13
+keyword_regeln=389
+einheiten=13
+
+=== 2. Seed-Lauf (Idempotenz) ===
+exit=0
+nach_2._lauf_kategorien=13
+nach_2._lauf_regeln=389
+
+=== pgTAP 01_rls ===
+1..45
+ok-Tests: 45
+not ok: 0
+exit=0
+```
+
+Ergebnis: Eine **frische** Datenbank enthält nach Migrationen + Seed **13 globale Kategorien, 389 Keyword-Regeln und 13 Einheiten**; der zweite Seed-Lauf bleibt bei 13/389. pgTAP läuft **45/45 ok, 0 Fehler**. Die Kernbehauptung von D1 ist damit reproduziert.
+
+#### (2) `config.toml` + Seed-Mount konsistent (D1/D4)
+
+```text
+$ cat supabase/config.toml
+project_id = "einkaufszettel"
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+$ docker-compose -f docker-compose.yml config -q
+exit=0
+$ docker-compose -f docker-compose.yml config --services
+db
+auth
+rest
+web
+caddy
+
+$ docker-compose -f docker-compose.yml config | grep -A4 -B2 zz_seed
+      - type: bind
+        source: /opt/data/workspace/einkaufszettel/supabase/seed.sql
+        target: /docker-entrypoint-initdb.d/zz_seed.sql
+        read_only: true
+
+$ supabase --version
+2.122.0
+$ supabase db reset
+{"_tag":"Error","error":{"code":"LocalDbRunningError","message":"failed to inspect service: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"}}
+```
+
+Ergebnis: Beide Seed-Pfade zeigen auf **dieselbe** Datei `supabase/seed.sql`; das Mount-Ziel `zz_seed.sql` sortiert alphabetisch nach den Migrationen (`2…` < `z…`). Die CLI **parst** `config.toml` (2.122.0) und scheitert erst an der fehlenden Docker-Engine, nicht an der Konfiguration. Compose-Config ist gültig, fünf Dienste, Seed-Mount korrekt gerendert. Der Laufzeitbeweis (`docker compose up`, `supabase db reset`) bleibt hostabhängig (D3).
+
+#### (3) `ARCHITECTURE.md` existiert, verweist auf PLAN §4, keine Widersprüche (D2)
+
+```text
+$ ls -l docs/
+-rw-r--r-- 1 hermes hermes  6113 ... ARCHITECTURE.md
+-rw-r--r-- 1 hermes hermes  4829 ... DECISIONS.md
+-rw-r--r-- 1 hermes hermes 12241 ... wireframes.md
+$ grep -n 'PLAN.md §4' docs/ARCHITECTURE.md
+42:  ... (PLAN.md §4.2).
+48:  ... Aggregator (PLAN.md §4.3), Kategorisierungsregeln
+49:  ... (PLAN.md §4.4) ...
+62:- **Datenhaltung:** Schema aus PLAN.md §4.1 (10 Tabellen inkl. profiles,
+67:- **Sicherheit:** RLS auf allen Tabellen (PLAN.md §4.5) ...
+74:  ... 13 Kategorien und Keyword-Regeln (PLAN.md §4.4).
+```
+
+Abgeglichen mit `PLAN.md` §4.1–4.5: 10 Tabellen mit denselben Namen, UUIDv7 clientseitig, `created_at`/`updated_at`/`deleted_at` + `updated_at`-Trigger, RLS auf allen Tabellen, Invite-Token nur als Hash, Rate-Limiting über Caddy, 13 Kategorien. **Keine Widersprüche** gefunden; die Aussage „Realtime erst Phase 2“ ist mit `PLAN.md` §5 (T2.5) konsistent. `wireframes.md` enthält weiterhin drei Skizzen inkl. Tap-Bilanz und offenen PO-Punkten.
+
+#### (4) Checkboxen T1.1/T1.2/T1.6/T1.7 korrekt, T1.3 weiter offen (D5/D6)
+
+```text
+$ grep -n 'T1\.[1-7]' PLAN.md | sed -n '1,7p'
+92:- [x] **T1.1** ...
+93:- [x] **T1.2** ... *AK:* Pipeline grün auf `master`.
+94:- [ ] **T1.3** ...
+100:- [x] **T1.4** ...
+101:- [x] **T1.5** ...
+102:- [x] **T1.6** ...        # in dieser Runde nach Prüfung abgehakt
+103:- [x] **T1.7** ...
+```
+
+T1.2 nennt jetzt `master`; der Workflow triggert `master` und `main`. T1.1/T1.2/T1.7 waren bereits korrekt. **T1.6 war nach dem Fix-Commit noch `[ ]`**, obwohl alle drei Dokumente vorlagen — in dieser Re-Abnahme nach inhaltlicher Prüfung auf `[x]` korrigiert. T1.3 bleibt bewusst offen (D3).
+
+#### (5) Regressionsstichprobe T1.1/T1.2/T1.7
+
+```text
+$ pnpm lint       -> LINT_EXIT=0   (Prettier: All matched files use Prettier code style!)
+$ pnpm typecheck  -> TC_EXIT=0     (Scope: 2 of 3 workspace projects; apps/web typecheck: Done)
+$ pnpm test       -> TEST_EXIT=0   (1 Test File passed, 1 Test passed)
+$ pnpm build      -> BUILD_EXIT=0  (Compiled successfully; Route / und /health)
+
+GitHub check-runs:
+2ce3b5d -> "Lint, Typecheck, Test, Build" completed success
+f918ede -> "Lint, Typecheck, Test, Build" completed success
+
+$ bash scripts/backup.sh   (gegen frische PG-DB, DATABASE_URL gesetzt)
+Backup erstellt: .../einkaufszettel-20261025T120528Z.sql.gz
+BACKUP_EXIT=0
+GZIP_OK
+55890 bytes
+```
+
+Keine Regression: Alle vier Gates exit 0, die CI ist auf beiden Fix-Commits grün, das Backup-Skript läuft real gegen eine frische DB (Exit 0, gzip-valid, 55.890 Byte).
+
+### 7.2 Befunde der Re-Abnahme
+
+- **D1/D4 — behoben.** `supabase/config.toml` vorhanden und von der CLI parsebar; `docker-compose.yml` mountet `supabase/seed.sql` als `zz_seed.sql`; frische DB liefert 13 Kategorien/389 Regeln. `supabase db reset` scheitert erst an der fehlenden Docker-Engine (Umgebung, kein Config-Fehler).
+- **D2 — behoben.** `docs/ARCHITECTURE.md` existiert (6.113 Byte), verweist auf `PLAN.md` §4.1–4.5 und widerspricht dem Plan nicht. `DECISIONS.md` und `wireframes.md` vorhanden.
+- **D5 — behoben, mit Nachzieher.** T1.1/T1.2/T1.7 waren bereits abgehakt; T1.6 war trotz vollständiger Dokumente noch offen und wurde in dieser Runde nach Prüfung abgehakt.
+- **D6 — behoben.** `PLAN.md` T1.2 nennt jetzt `master`; Workflow deckt `main` und `master` ab.
+- **D3 — weiter offen (Umgebung).** Kein Docker-Daemon in der Sandbox; `docker compose up`, Caddy-Build, Zertifikatsausstellung, HTTPS-`/health` und `supabase db reset` sind hier nicht ausführbar. Gemäß Aufgabenstellung ist D3 ein Docker-Host-Thema und **kein Gate-1-Blocker**, sondern ein offener Punkt.
+- **D7 [niedrig] — Checkbox T1.6 nach Fix-Commit noch offen.** In dieser Re-Abnahme korrigiert; kein Produktivcode betroffen.
+
+### 7.3 Urteil je Aufgabe (Re-Abnahme)
+
+| Aufgabe | Urteil | Begründung (knapp) |
+|---|---|---|
+| **T1.1** | **bestanden** | `pnpm lint/typecheck/test/build` je exit 0; CI grün. |
+| **T1.2** | **bestanden** | Check-runs `2ce3b5d` und `f918ede`: „Lint, Typecheck, Test, Build“ completed success; AK nennt `master`. |
+| **T1.3** | **nicht bestanden (offen, D3)** | Statisch gültig (Compose-Config exit 0, 5 Dienste, Seed-Mount); Laufzeit-/HTTPS-Nachweis ohne Docker-Daemon nicht möglich. Kein neuer Defekt, hostabhängiger offener Punkt. |
+| **T1.4** | **bestanden** | Auf frischer DB erneut: pgTAP 45/45 ok, 0 Fehler; RLS/Trigger unverändert grün. |
+| **T1.5** | **bestanden** | Frische DB: 13 Kategorien/389 Regeln/13 Einheiten; zweiter Seed-Lauf idempotent; `config.toml` + Seed-Mount konsistent. Wörtlicher `supabase db reset`-Lauf bleibt host-offen (D3). |
+| **T1.6** | **bestanden** | `ARCHITECTURE.md`, `DECISIONS.md`, `wireframes.md` vorhanden; ARCH verweist auf PLAN §4.1–4.5, keine Widersprüche; Checkbox in dieser Runde abgehakt. |
+| **T1.7** | **bestanden** | README 5 Schritte, `.env.example` vollständig; Backup real: Exit 0, gzip-valid, 55.890 Byte. |
+
+### 7.4 Gesamturteil der Re-Abnahme
+
+**bestanden unter Vorbehalt.**
+
+Die Defekte D1/D4 und D2/D5/D6 sind behoben; die Welle-1-Substanz ist damit Gate-1-fähig. Einziger offener Punkt bleibt **T1.3/D3**: der Laufzeitnachweis von `docker compose up --build`, Caddy-Build, gültigem Zertifikat, HTTPS-`/health` und dem wörtlichen `supabase db reset` auf einem Docker-Host. Gemäß Aufgabenstellung ist das kein Gate-1-Blocker, sondern ein dokumentierter offener Punkt; die Checkbox T1.3 bleibt bis zum Host-Nachweis offen.

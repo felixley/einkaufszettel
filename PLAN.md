@@ -99,7 +99,7 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
   - **Doku:** Entscheidung A/B in `docs/DECISIONS.md`; Renewal-Test (`caddy`-Logs bzw. `lego renew --dry-run`) in `README`.
 - [x] **T1.4** Migrationen für Datenmodell 4.1 inkl. Trigger, Indizes, **RLS-Policies**. *AK:* pgTAP-Tests belegen: Nichtmitglied sieht nichts, Viewer kann nicht schreiben, Editor kann Items ändern, nur Owner verwaltet Mitglieder.
 - [x] **T1.5** Seed: Kategorien + Keyword-Regeln, Einheiten. *AK:* `supabase db reset` liefert lauffähige Basisdaten.
-- [ ] **T1.6** `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, Wireframes als einfache Low-Fi-Komponenten-Skizzen (Liste, Rezept, Import-Dialog) in `docs/wireframes.md`.
+- [x] **T1.6** `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, Wireframes als einfache Low-Fi-Komponenten-Skizzen (Liste, Rezept, Import-Dialog) in `docs/wireframes.md`.
 - [x] **T1.7** `.env.example`, `README` mit Setup in max. 5 Schritten, Backup-Skript (`scripts/backup.sh`, Cron-Beispiel).
 
 🛑 **Human Gate 1:** Schema, RLS-Konzept und Wireframes freigeben.
