@@ -97,8 +97,8 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
   - **Variante B (Fallback, falls A mit der Caddy-Version nicht läuft):** `lego`-Container (`--dns ipv64`) erneuert Zertifikate per Cron; Caddy bindet die Zertifikatsdateien per Volume ein (`tls /certs/fullchain.pem /certs/key.pem`).
   - **DNS:** A-/AAAA-Record bei ipv64 auf die Server-IP. Für reinen Heimnetz-Betrieb darf der Record auf die **private IP** zeigen (Zertifikat funktioniert trotzdem dank DNS-01); für Zugriff von unterwegs Port-Freigabe oder VPN (WireGuard/Tailscale) ergänzen.
   - **Doku:** Entscheidung A/B in `docs/DECISIONS.md`; Renewal-Test (`caddy`-Logs bzw. `lego renew --dry-run`) in `README`.
-- [ ] **T1.4** Migrationen für Datenmodell 4.1 inkl. Trigger, Indizes, **RLS-Policies**. *AK:* pgTAP-Tests belegen: Nichtmitglied sieht nichts, Viewer kann nicht schreiben, Editor kann Items ändern, nur Owner verwaltet Mitglieder.
-- [ ] **T1.5** Seed: Kategorien + Keyword-Regeln, Einheiten. *AK:* `supabase db reset` liefert lauffähige Basisdaten.
+- [x] **T1.4** Migrationen für Datenmodell 4.1 inkl. Trigger, Indizes, **RLS-Policies**. *AK:* pgTAP-Tests belegen: Nichtmitglied sieht nichts, Viewer kann nicht schreiben, Editor kann Items ändern, nur Owner verwaltet Mitglieder.
+- [x] **T1.5** Seed: Kategorien + Keyword-Regeln, Einheiten. *AK:* `supabase db reset` liefert lauffähige Basisdaten.
 - [ ] **T1.6** `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`, Wireframes als einfache Low-Fi-Komponenten-Skizzen (Liste, Rezept, Import-Dialog) in `docs/wireframes.md`.
 - [ ] **T1.7** `.env.example`, `README` mit Setup in max. 5 Schritten, Backup-Skript (`scripts/backup.sh`, Cron-Beispiel).
 
