@@ -280,6 +280,61 @@ die Abnahme, entscheidet aber nicht.
 
 ---
 
+## Welle 2 — Frontend (`frontend`) · Karte `t_06dd2e88` (T2.3 + T2.4 UI)
+
+### T2.3 Einladung Link/QR · T2.4 Mitgliederverwaltung (UI + E2E)
+
+- **Status Frontend:** **fertig.** Die UI-Anteile zu T2.3/T2.4 sind umgesetzt und
+  per Playwright mit zwei Browser-Kontexten belegt (A-3/A-4). Damit ist der in
+  der Backend-Sektion genannte Vorbehalt aufgeloest; die Checkboxen T2.3/T2.4
+  in `PLAN.md` sind abgehakt.
+- **Gelieferte Pfade (`apps/web`):**
+  - `lib/household/` — Adapter-Abstraktion (`getHouseholdAdapter()`), Rollen/
+    Typen, UUIDv7, Token-Erzeugung + SHA-256, Supabase-Adapter (RPCs aus
+    Migration 005), Mock-Adapter (Dev/E2E ohne Supabase).
+  - `app/api/mock/household/route.ts` — In-Memory-Mock-Server (nur im
+    Mock-Auth-Modus; spiegelt Rollen, Ablauf, Widerruf, Auslastung und die
+    Letzter-Owner-Regel des Backend-Vertrags).
+  - `components/household/InvitationDialog.tsx` — Rollenwahl, `max_uses`,
+    Ablauf, Link **und** QR (`qrcode`, clientseitig gerendert), Kopieren.
+  - `components/household/MemberManagementPanel.tsx` — Mitgliederliste mit
+    `profile.display_name`, Rollenwechsel, Entfernen mit Inline-Bestaetigung,
+    „Haushalt verlassen“ inkl. `P0001`-Hinweis, sowie Schreib-Probe (Editor
+    darf schreiben, Viewer nicht).
+  - `app/household/page.tsx` — Onboarding „Haushalt anlegen“ + Verwaltung.
+  - `app/invite/[token]/page.tsx` — Vorschau (`check_invite`) und Beitritt
+    (`accept_invite`) mit unterscheidbaren Meldungen fuer
+    abgelaufen/widerrufen/aufgebraucht/nicht gefunden.
+  - `e2e/household.spec.ts` — 2 Tests × 2 Projekte (chromium, mobile-chromium).
+- **Akzeptanzkriterien (belegt):**
+  - **A-3:** Einladung einloesen → gewaehlte Rolle greift (Editor schreibt,
+    Viewer nicht); abgelaufener Link wird mit eigener Meldung abgelehnt
+    (Mock: `debug-expire` setzt `expires_at` in die Vergangenheit); widerrufener
+    Link ebenso unterscheidbar.
+  - **A-4:** Rolle Editor→Viewer wirkt sofort auf das Schreibrecht (ohne
+    Reload); Entfernen entzieht den Zugriff (Betroffener sieht wieder den
+    Onboarding-Dialog); letzter Owner kann nicht austreten (Meldung sichtbar,
+    Haushalt bleibt bestehen).
+- **Technische Entscheidungen:**
+  1. **Roh-Token bleibt im Client:** 32 Byte Zufall (256 Bit) base64url im Link
+     `/invite/<token>`; an die RPC geht nur der SHA-256-Hex-Hash. QR enthaelt
+     dieselbe URL.
+  2. **Mock nur bei Mock-Auth:** `getHouseholdAdapter()` waehlt anhand von
+     `isMockAuth()`. Der Mock-Server ist eine Route im Dev-Server (In-Memory,
+     pro Prozess); im Supabase-Modus laufen alle Pfade ueber `supabase.rpc(...)`
+     und RLS. Kein Produktions-Server-Roundtrip fuer den QR.
+  3. **Ein-Hand-Bedienung:** Dialog als Bottom-Sheet, zentrale Buttons ≥ 48 px,
+     Inline-Bestaetigung statt `window.confirm`.
+- **Test-Nachweis (frisch in dieser Karte):**
+  - `pnpm exec vitest run` → **154/154 Tests, 15 Dateien gruen**.
+  - `pnpm exec playwright test` → **10/10 gruen** (chromium + mobile-chromium,
+    inkl. `e2e/household.spec.ts`).
+  - `pnpm typecheck` → Exit 0 (core build + alle Workspace-Projekte).
+  - `pnpm --filter @einkaufszettel/web build` → Exit 0.
+- **Offene Fragen:** Keine.
+
+---
+
 **Nächster Schritt:** Re-Scope-Kommentare an den Karten beachten (Body ignorieren),
 dann T1.1 starten. MVP-Feature-AKs für Phase 2: `PLAN.md` Anhang A (A-1…A-8).
 Rückmeldung an architect: Commit-Hash, erfüllte T1.x/AK, offene Punkte.

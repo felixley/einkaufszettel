@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { isMockAuth } from './lib/auth/mode';
 import { decodeMockSession, MOCK_SESSION_COOKIE } from './lib/auth/session';
 
-const PROTECTED_PREFIXES = ['/lists'];
+const PROTECTED_PREFIXES = ['/lists', '/household', '/invite'];
 const AUTH_ROUTES = ['/login', '/register', '/forgot-password', '/reset-password'];
 
 function loginRedirect(request: NextRequest): NextResponse {
@@ -73,5 +73,13 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/lists/:path*', '/login', '/register', '/forgot-password', '/reset-password'],
+  matcher: [
+    '/lists/:path*',
+    '/household/:path*',
+    '/invite/:path*',
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/reset-password',
+  ],
 };
