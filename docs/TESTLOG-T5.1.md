@@ -203,3 +203,86 @@ Details: `docs/DECISIONS.md` (D24-Eintrag), `docs/REVIEW.md` §12.5.
 
 **Vorbereitete PO-Entscheidung `v1.0.1`:** (A, empfohlen) Patch-Release erst nach
 grüner WebKit-Lane; (B) Patch-Release sofort mit dokumentiertem D24 und Chromium-Gate.
+
+## D24 behoben 2026-10-26 (Karte `t_6568b4f0`, Commit `e8a6b77`)
+
+**Symptom (belegt):** Nur die WebKit-Projekte der Suite waren rot — 9 Fehlschläge
+im CI-Run `40393343034` (`master` @ `4e26cd5`), Chromium-Lane 68/68 grün:
+
+```text
+Error: page.goto: Navigation to "http://localhost:3210/lists" is interrupted
+       by another navigation to "http://localhost:3210/household"
+[WebServer] [browser] Failed to fetch RSC payload for http://localhost:3210/household.
+       Falling back to browser navigation. TypeError: Load failed
+```
+
+**Ursache (nachgestellt im Chromium-Netzwerktrace einer e2e-Probe):** Nach
+`router.refresh()`/`router.replace()` — Login (`app/login/page.tsx:60`) und
+„Haushalt anlegen“ (`app/household/page.tsx:61`) — hält der Next-App-Router
+einen RSC-Fetch für die aktuelle Route offen. Ein `page.goto()` in diesem Fenster
+bricht den Fetch ab; der Router fällt auf eine **Browser-Navigation** zur alten
+Route zurück und unterbricht unser `goto`. Chromium gewinnt dieses Rennen
+(Zielnavigation), WebKit verliert es — deshalb traf es nur `webkit`/`mobile-webkit`.
+
+```text
+# gleiche Probe, MIT Fix (jederzeit reproduzierbar):
+3463ms REQ  GET /household?_rsc=…     # router.refresh() nach „Haushalt anlegen“
+3476ms # household-title ok; offen: ["POST /api/mock/household", "GET /household?_rsc=…"]
+3572ms RES  200 /household?_rsc=…     # läuft durch, kein Abort
+3728ms # settlePage nach create: 252 ms; offen danach: []
+3857ms REQ  GET /lists (document) → 3964ms RES 200 → NAV /lists   # kein Fallback /household
+
+# OHNE Fix (vorher, gleiche Probe):
+4359ms REQ  /lists (document)
+4384ms RES  200 /household?_rsc=…
+4447ms FAIL /household?_rsc=… net::ERR_ABORTED
+4460ms NAV  → /household              # Fallback-Navigation während des goto('/lists')
+```
+
+**Fix — nur `apps/web/e2e/**`, kein Produktivcode:**
+
+1. Neu `e2e/support/navigation.ts`: zentrales `gotoHydrated` + `settlePage`.
+   `settlePage` verfolgt die offenen `document`/`fetch`/`xhr`-Anfragen selbst und
+   wartet auf ein ruhiges Fenster. **`waitForLoadState('networkidle')` ist hier
+   nutzlos** — der Lifecycle-Zustand ist pro Dokument „sticky“; gemessen: der
+   Aufruf kehrte in 5 ms zurück, während `/household?_rsc=…` noch offen war.
+   Vom Service Worker gestellte Anfragen (Precache der App-Shell) werden
+   ignoriert (sie unterbrechen keine Navigation, würden aber Seiten-Timings
+   verschieben). `gotoWithRetry` fängt „interrupted by another navigation“ als
+   Backstop ab.
+2. Alle 12 Specs nutzen das zentrale `gotoHydrated` statt 12 eigener Kopien;
+   `createHousehold()` (recipes/recipe-transfer/household/categorization) wartet
+   nach dem Anlegen auf Ruhe (dort feuert `router.refresh()`).
+3. `offline.spec.ts`: Der SW-Kontrollnachweis wiederholt den Reload (mit klarer
+   Fehlermeldung), statt in den 60-s-Timeout zu laufen. Der Reload fiel in vollen
+   Chromium-Lane-Läufen reproduzierbar in das `clients.claim()`-Fenster (in
+   Einzellaeufen nie); im ersten grünen CI-nahen Gegenlauf stand im Log
+   `[sw] Seite erst nach 2 Reloads vom Service Worker kontrolliert`.
+
+**Echter CI-Lauf (Nachweis)** — Run `40409077482`, Workflow `E2E`, `master`,
+`e8a6b77`, Schritt „Run E2E tests“ 22:01:47 → 22:11:18 **success**:
+
+```text
+  chromium          34 ✓   0 ✘
+  mobile-chromium   34 ✓   0 ✘
+  webkit            31 ✓   1 flaky   2 skipped
+  mobile-webkit     32 ✓   0 ✘   2 skipped
+
+  0 failed
+  1 flaky
+  4 skipped
+  131 passed (9.5m)
+```
+
+- **Alle vier Projekte grün, 0 Fehlschläge.** Die 9 früheren D24-Fehlschläge
+  (`categorization.spec.ts:80`, `recipe-transfer.spec.ts:95`/`:160`,
+  `recipes.spec.ts:64`/`:116` je WebKit-Projekt) sind grün, ohne Retry-Bedarf.
+  Die 4 Skips sind unverändert die fachlich begründeten WebKit-Ausnahmen
+  (`offline.spec.ts` Szenario A, `pwa.spec.ts` SW-Kontrolle).
+- **Restlicher Flake (nicht D24):** `household.spec.ts:65` in `webkit` brauchte
+  einen Retry — `expect(owner.page.getByTestId('member-info')).toContainText('Viewer')`
+  (Zeile 116), „element(s) not found“ nach dem Rollenwechsel. Keine
+  Navigationskollision; Folgekarte **`t_113dd842`**.
+- **Lokaler Gegenlauf auf demselben Stand** (Sandbox, WebKit dort nicht
+  lauffähig): `chromium` + `mobile-chromium` **68 passed (5,6m)**, `pnpm test`
+  **280/280**, `pnpm typecheck` und `pnpm lint` grün.

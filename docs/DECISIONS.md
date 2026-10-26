@@ -501,16 +501,25 @@ projektweiter Umbau und nicht Teil von T4.3.
   der Zielgruppe (iPhone im Supermarkt) — ein dauerhaft ungetesteter Safari-Pfad
   wäre ein blindes Risiko. Als **Übergang** bleibt die Lane bis zum Fix bewusst
   sichtbar rot (kein `continue-on-error`, keine stille Ausnahme).
-- **Risiko/Status:** **Offen.** Erwarteter Fix ist reine Testrobustheit (Warten
-  auf abgeschlossene Navigation nach `createHousehold()`/Login, z. B.
-  `waitForURL('**/household')`, `waitForLoadState('networkidle')`,
-  `expect(page).toHaveURL(...)`), **kein** Produktivcode. Nur falls der neue
-  CI-Lauf im `playwright-report`-Trace zeigt, dass die App unter WebKit
-  tatsächlich falsch navigiert/redirectet, ist `apps/web` dran — das ist vorher
-  zu belegen. Verifikation ausschließlich über einen **echten CI-Lauf auf
-  `master`** (lokal kein WebKit in der Sandbox); Chromium-Lane muss 68/68 grün
-  bleiben. Eine CI-Iteration kostet ~10 min.
+- **Risiko/Status:** **Behoben** (`e8a6b77`, 2026-10-26, Karte `t_6568b4f0`).
+  Belegter Auslöser war kein `networkidle`-Warten, sondern ein **abbruchbarer
+  RSC-Fetch**: Nach `router.refresh()`/`router.replace()` (Login,
+  „Haushalt anlegen“ in `app/household/page.tsx:61`) hält der Next-App-Router
+  einen RSC-Fetch für die aktuelle Route offen; ein `page.goto()` in diesem
+  Fenster bricht ihn ab, Next fällt auf eine **Browser-Navigation** zur alten
+  Route zurück und unterbricht das `goto` — in Chromium gewinnt die
+  Zielnavigation das Rennen, in WebKit die Fallback-Navigation. Umgesetzt ist
+  deshalb ein zentraler E2E-Helfer `apps/web/e2e/support/navigation.ts`
+  (`settlePage` verfolgt offene `document`/`fetch`/`xhr`-Anfragen selbst und
+  wartet auf Ruhe; `gotoHydrated` wartet vor/nach der Navigation und wiederholt
+  ein unterbrochenes `goto`), den alle 12 Specs nutzen. **Kein Produktivcode.**
+  Nachweis: CI-Run `40409077482` (`E2E`, `master` @ `e8a6b77`) = **131 passed /
+  1 flaky / 4 skipped / 0 failed**, Job `success`, alle vier Projekte grün;
+  Chromium-Lane lokal weiter 68/68. Verbleibende, nicht D24-bedingte Flakiness
+  (`household.spec.ts:116`, WebKit) in Karte `t_113dd842`. Details:
+  `docs/REVIEW.md` §12.5, `docs/TESTLOG-T5.1.md`.
 - **Vorbereitete PO-Entscheidung `v1.0.1`:** (A, empfohlen) Patch-Release erst
   nach **grüner** WebKit-Lane; (B) Patch-Release sofort mit dokumentiertem D24
   und Chromium-Gate. Ohne PO-Entscheid kein Tag. Begründung und Optionen in
-  `docs/REVIEW.md` §12.5 (D24) und im Handoff zu `t_6568b4f0`.
+  `docs/REVIEW.md` §12.5 (D24) und im Handoff zu `t_6568b4f0`. Mit `e8a6b77` ist
+  die WebKit-Lane grün; Option (A) ist damit erfüllt.
