@@ -64,6 +64,13 @@ export default function ListsPage() {
   const history = useItemHistory();
   const nameInputRef = useRef<HTMLInputElement>(null);
   const blurTimerRef = useRef<number | null>(null);
+  /**
+   * Synchroner Submit-Lock (T4.5): `isSubmitting` (State) wird erst beim
+   * naechsten Render sichtbar. Die Zeile erscheint per liveQuery aber schon
+   * nach dem Dexie-Schreibvorgang – ein direkt folgender zweiter Add wuerde
+   * sonst still verworfen. Der Ref greift sofort.
+   */
+  const submitLockRef = useRef(false);
 
   const [newItemName, setNewItemName] = useState('');
   const [newItemQuantity, setNewItemQuantity] = useState('');
@@ -130,7 +137,8 @@ export default function ListsPage() {
 
   async function handleAddItem(event: React.FormEvent) {
     event.preventDefault();
-    if (!newItemName.trim() || isSubmitting) return;
+    if (!newItemName.trim() || submitLockRef.current) return;
+    submitLockRef.current = true;
     setIsSubmitting(true);
     setAddHint(null);
     setShowSuggestions(false);
@@ -160,6 +168,7 @@ export default function ListsPage() {
       // Enter/Submit bleibt im Feld (T4.5) – direkt weiter tippen.
       nameInputRef.current?.focus();
     } finally {
+      submitLockRef.current = false;
       setIsSubmitting(false);
     }
   }

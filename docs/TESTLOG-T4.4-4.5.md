@@ -97,3 +97,26 @@ bleibt im Eingabefeld).
   vertikaler Bewegung > 10 px gewinnt das Scrollen (Achsen-Lock).
 - Barrierefreiheit: Fokusringe bleiben erhalten; Kontrast über die
   CSS-Variablen (Prüfung durch T4.6/axe).
+
+## Nachtrag 2026-10-26 11:20 — Wiederholungslauf nach Crash (Run 86)
+
+Der vorige Worker hatte den Code committet (365e1c6), ist aber bei der
+Abschlussantwort in eine Repetitions-Schleife geraten. Dabei blieb ein
+unfertiger Edit in `app/lists/page.tsx` liegen: ein deklarierter, aber
+ungenutzter `submitLockRef`. Der Ref ist jetzt korrekt verdrahtet (Lock setzen
+vor dem ersten `await`, Freigabe im `finally`) und verhindert Doppel-Adds, die
+zwischen Dexie-Schreibvorgang und React-Render sonst still verloren gingen.
+
+Frischer Nachweis (nach dem Fix, gleicher Rechner):
+
+```
+pnpm typecheck                          → OK
+pnpm lint                               → OK (eslint + prettier --check)
+pnpm test                               → 280 Tests in 24 Dateien, alle grün
+pnpm --filter @einkaufszettel/web build → exit 0 (14/14 static pages)
+playwright test e2e/ui-polish.spec.ts   → 10 passed (1.5m, chromium + mobile-chromium)
+playwright test (volle Suite)           → 52 passed (3.4m)
+```
+
+Die volle Suite enthält zusätzlich `e2e/dead-letter.spec.ts` (T4.3b) und
+`e2e/pwa.spec.ts` (T4.1) aus dem aktuellen Arbeitsbaum; keine Regression.
