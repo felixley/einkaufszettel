@@ -380,3 +380,152 @@ lesen; der nächste architect-Lauf soll die Kanten nachziehen, sobald die Läufe
 
 - T1.3-Laufzeitnachweis (Compose/HTTPS) weiterhin nur auf einem Docker-Host möglich.
 - Dependency-Gating der drei bereits laufenden Karten nachziehen, sobald beendet.
+
+---
+
+## Welle 4 — Phase 4 „PWA, Offline-Härtung & UX“ (`architect`, Karte `t_81b02bfb`)
+
+**Planungsstand 2026-10-26.** Maßgeblich bleiben `PLAN.md` §5 (T4.1–T4.6) und der neue
+**Anhang C** (Kartenschnitt + prüfbare AKs C-1…C-8). Phase 2/3 sind abgenommen; Welle 4
+baut PWA-Grundlage, Offline-Testbarkeit, Backoff/Dead-Letter, UX/Ergonomie und A11y.
+
+**Karten-IDs (erstellt von architect):**
+
+| Karte             | ID           | Assignee | Abhängig von   |
+| ----------------- | ------------ | -------- | -------------- |
+| T4.1 PWA          | `t_4e27c239` | frontend | —              |
+| T4.2a Mock-Sync   | `t_bba90d6d` | frontend | —              |
+| T4.2b Offline-E2E | `t_18741bd9` | qa       | T4.1, T4.2a    |
+| T4.3a Backoff     | `t_28db1c12` | core     | —              |
+| T4.3b DLQ/Worker  | `t_e8af35e9` | frontend | T4.3a, T4.2a   |
+| T4.4+4.5 UX/Mobile| `t_d230d8e6` | frontend | T4.1           |
+| T4.6 A11y/axe     | `t_e07f902e` | frontend | T4.4+4.5       |
+
+> **Hinweis zum Kartenschnitt:** Der Karten-Body ging beim Anlegen technisch verloren;
+> die vollständigen Spezifikationen (Ziel, Scope, Anforderungen, AK/Nachweis, Constraints,
+> Abhängigkeiten) liegen deshalb als **Kommentar** an jeder Karte und sind dort maßgeblich.
+> Mehrere Karten wurden vom Dispatcher sofort gestartet, bevor Spezifikation/Verlinkung
+> gesetzt waren; wo `kanban_link` wegen „child is already running“ abgelehnt wurde, steht
+> die Abhängigkeit im Kommentar („falls nicht fertig → `kanban_block(kind="dependency")`“).
+
+### T4.1 PWA-Grundlage (`frontend` · Karte `t_4e27c239`)
+
+- **Ziel:** Manifest, Icons, Service Worker (App-Shell-Precache + SWR für Assets),
+  Registrierung, Install-Prompt, Offline-Fallback. Kein Push.
+- **Akzeptanzkriterium:** Lighthouse-Installability-Audits bestanden; `e2e/pwa.spec.ts`
+  (Manifest 200/valide, SW-Controller nach Reload) in beiden Projekten; Unit-Tests für
+  Cache-Strategie-Auswahl; `lint/typecheck/test` + Web-Build grün. PLAN-Checkbox T4.1.
+- **Betroffene Pfade:** `apps/web/public/`, `app/manifest.ts` oder `public/manifest.webmanifest`,
+  `app/layout.tsx` (minimal), `components/pwa/`, `lib/pwa/` (+Tests).
+- **Constraints:** `/rest/v1/*`, `/auth/v1/*`, `/api/*` nie cachen; keine externen Assets/Secrets;
+  bestehende E2E nicht brechen (SW-Test-Flag). Keine Sync-Logik.
+- **Abhängigkeiten:** keine; parallel zu T4.2a (disjunkte Pfade).
+- **Offene Fragen:** keine.
+
+### T4.2a Dev-Mock-Sync + Mock-Realtime (`frontend` · Karte `t_bba90d6d`)
+
+- **Ziel:** Dev-only In-Memory-Sync-Server + `MockSyncAdapter` + `MockRealtimeSource` (Polling),
+  damit zwei Browser-Kontexte („zwei Geräte“) im Mock-Modus real konvergieren; Status-Modus
+  entsprechend anpassen.
+- **Akzeptanzkriterium:** Zwei Clients konvergieren < 5 s; Upsert idempotent; `add_to_list`
+  gleiche `request_id` ohne Doppelmenge; Supabase-Pfad unverändert; Integrationstest mit
+  echtem Tool-Output in `docs/TESTLOG-T4.2a.md`.
+- **Betroffene Pfade:** `app/api/mock/sync/route.ts`, `lib/sync/mock-adapter.ts`,
+  `lib/sync/mock-realtime.ts`, `lib/sync/create-adapter.ts`, `lib/sync/status.ts` (+Tests),
+  `docs/DECISIONS.md`.
+- **Constraints:** dev-only, In-Memory, keine Secrets, keine neuen Runtime-Deps; Supabase-Modus
+  unangetastet; PWA-Pfade (T4.1) nicht anfassen.
+- **Abhängigkeiten:** keine; T4.2b und T4.3b hängen daran.
+- **Offene Fragen:** keine blockierenden.
+
+### T4.2b Offline-E2E (`qa` · Karte `t_18741bd9`)
+
+- **Ziel:** `e2e/offline.spec.ts` mit `context.setOffline(true)` für Szenario A „Supermarkt
+  ohne Netz“ (ein Gerät, inkl. Offline-Reload aus SW) und Szenario B „zwei Geräte offline,
+  dann online“ (zwei Kontexte, gleicher Haushalt, Konvergenz ohne Duplikate/Verluste).
+- **Akzeptanzkriterium:** 2 Szenarien × 2 Playwright-Projekte grün, keine Flakes; Gesamtsuite
+  ohne Regression; Server-Assertion über Mock-Sync-API; `docs/TESTLOG-T4.2.md`. PLAN-Checkbox T4.2.
+- **Betroffene Pfade:** `apps/web/e2e/offline.spec.ts` (neu), ggf. `e2e/helpers/*`, Testlog.
+- **Constraints:** nur Testcode; fehlende Produktivfunktion → Kommentar an T4.2a und
+  `kanban_block(kind="dependency")`, nicht selbst bauen. Echter Supabase-Lauf bleibt offen (D14).
+- **Abhängigkeiten:** T4.1 (SW/Offline-Reload) und T4.2a (Mock-Sync).
+- **Offene Fragen:** keine.
+
+### T4.3a Backoff-Policy (`core` · Karte `t_28db1c12`)
+
+- **Ziel:** Reine Backoff-Logik in `packages/core`: `nextRetryDelayMs` (1/2/4/8/16 s, Cap 60 s,
+  ±20 % injizierbarer Jitter), `next_attempt_at` im Outbox-Eintrag, Dead-Letter nach
+  `maxAttempts` (5); rückwärtskompatibel/additiv.
+- **Akzeptanzkriterium:** ≥10 neue Unit-Tests (Sequenz, Cap, Jitter, attempts-Inkrement,
+  next_attempt_at mit fester Uhr, Dead-Letter nach 5, Erfolg ohne next_attempt_at,
+  doppeltes Replay idempotent); `packages/core` + Gesamtprojekt grün. Keine PLAN-Checkbox
+  (T4.3 tickt T4.3b).
+- **Betroffene Pfade:** `packages/core/src/outbox.ts` (+Test), ggf. `sync.ts`, `index.ts`,
+  `docs/DECISIONS.md`.
+- **Constraints:** reine Funktionen, keine Framework-/I/O-Abhängigkeiten; `apps/web` nicht anfassen;
+  bestehende Semantik (Idempotenz, Delete gewinnt) erhalten.
+- **Abhängigkeiten:** keine; T4.3b hängt daran.
+- **Offene Fragen:** keine.
+
+### T4.3b Worker-Backoff + Dead-Letter-Anzeige (`frontend` · Karte `t_e8af35e9`)
+
+- **Ziel:** Worker respektiert `next_attempt_at` (30-s-Timer), manueller Trigger/Reconnect
+  versucht sofort; DeadLetterPanel mit Fehlertext/Versuchen und Aktionen „Erneut versuchen“
+  (attempts=0, neu einreihen) und „Verwerfen“; leerer Zustand; Status aktualisiert.
+- **Akzeptanzkriterium:** Worker-/Repository-Unit-Tests (Backoff-Skip, Sofort-Retry, DLQ nach 5,
+  retry/discard) + Playwright-UI-Nachweis mit Fehlerinjektion; `docs/TESTLOG-T4.3.md`;
+  PLAN-Checkbox T4.3.
+- **Betroffene Pfade:** `lib/sync/worker.ts` (+Test), `lib/db/repository.ts` (+Test),
+  `components/sync/DeadLetterPanel.tsx`, `components/SyncStatusBadge.tsx`, Einbindung, Testlog.
+- **Constraints:** nur `apps/web`; keine Änderung an core/Supabase; PWA-/Mock-Sync-Pfade
+  anderer Worker nicht überschreiben; bei Index-Lock warten.
+- **Abhängigkeiten:** T4.3a (Backoff), T4.2a (Fehlerinjektion).
+- **Offene Fragen:** keine.
+
+### T4.4 + T4.5 UI-Polish & Mobile-Ergonomie (`frontend` · Karte `t_d230d8e6`)
+
+- **Ziel:** Dark Mode (System + Toggle, persistiert, kein Flash), Responsive 320–430 px +
+  Tablet/Desktop, Empty States, Skeletons, Micro-Interactions (reduced-motion respektiert);
+  Touch-Ziele ≥44 px, Eingabefeld unten mit Safe-Area, Enter bleibt im Feld,
+  Autovervollständigung aus Historie, Swipe abhaken/löschen; Artikel in ≤2 Taps.
+- **Akzeptanzkriterium:** `e2e/ui-polish.spec.ts` in beiden Projekten (Toggle-Persistenz,
+  Systemmodus via `emulateMedia`, Touch-Höhen ≥44 px, ≤2-Tap-Ablauf, Swipe, reduced-motion);
+  bestehende 32 E2E grün; `lint/typecheck/test/build` grün; PLAN-Checkboxen T4.4 und T4.5;
+  `docs/TESTLOG-T4.4-4.5.md`.
+- **Betroffene Pfade:** `app/globals.css`, `components/list/*`, `app/lists/*`, `app/list/*`,
+  `components/theme/` (neu), ggf. `app/layout.tsx` minimal, `app/recipes/page.tsx` (Empty/Skeleton).
+- **Constraints:** keine Sync-/Datenlogik; keine neuen Runtime-Deps ohne Not (Swipe via pointer
+  events); Fokusringe nicht entfernen; keine horizontalen Scrollbalken bei 320 px.
+- **Abhängigkeiten:** T4.1 (Layout/Theme-Kollision vermeiden); T4.6 hängt an dieser Karte.
+- **Offene Fragen:** keine; Swipe links = löschen, rechts = abhaken, Achsen-Lock ab 10 px.
+
+### T4.6 Barrierefreiheit + axe-Check (`frontend` · Karte `t_e07f902e`)
+
+- **Ziel:** WCAG-Basis (Kontrast, sichtbarer Fokus, Labels, Rollen) + `e2e/a11y.spec.ts` mit
+  axe (`@axe-core/playwright`) auf Login/Liste/Rezepte/Haushalt; 0 serious/critical; läuft
+  in CI über die bestehende `e2e.yml` (kein Workflow-Umbau).
+- **Akzeptanzkriterium:** axe-Spec in beiden Projekten grün, Report in `docs/TESTLOG-T4.6.md`;
+  Gesamtsuite grün; `lint/typecheck/test` grün; PLAN-Checkbox T4.6.
+- **Betroffene Pfade:** `apps/web/package.json` (devDep) + Lockfile, `e2e/a11y.spec.ts`,
+  A11y-Fixes in `components/**`/`app/**`, Testlog.
+- **Constraints:** keine Verhaltensänderung der App; keine Runtime-Dependency; andere Worker
+  in `components/list`, `components/pwa`, `lib/sync` nicht überschreiben.
+- **Abhängigkeiten:** T4.4+4.5 (finale UI).
+- **Offene Fragen:** keine blockierenden.
+
+### Entscheidungen (Welle 4)
+
+- **Kein devops-Auftrag:** `ci.yml` und `e2e.yml` decken die neuen Karten automatisch ab;
+  axe läuft als zusätzliche Playwright-Spec. Nur falls ein Workflow-Umbau nötig würde,
+  käme devops hinzu.
+- **Mock-Sync (dev-only) statt echtem Supabase-E2E:** In dieser Sandbox ist kein Docker-Daemon
+  verfügbar; das PLAN-AK „zwei Geräte offline, dann online“ wird gegen eine In-Memory-Gegenstelle
+  real geprüft. Echter Supabase-Lauf bleibt offener Umgebungspunkt (analog D14).
+- **T4.3 geteilt** in Core-Logik (`t_28db1c12`) und Web-Verdrahtung/UI (`t_e8af35e9`).
+- **T4.4 + T4.5 in einer Karte**, weil dieselben UI-/CSS-Pfade betroffen sind (Kollisionsschutz).
+
+### Offene Punkte (nicht blockierend)
+
+- Echter Supabase-E2E-Lauf (PostgREST/Realtime) auf Docker-Host nachzuholen.
+- T1.3 (Compose/HTTPS-Laufzeitnachweis) weiterhin offen; HTTPS ist Voraussetzung für echte
+  PWA-Installation, localhost gilt als sicherer Kontext für Lighthouse/Playwright.

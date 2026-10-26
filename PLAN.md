@@ -245,3 +245,58 @@ Aufwand deutlich **> 1 Tag** (eigene Tabelle, RLS-Policies, CRUD-UI, Abgleichlog
 
 - T1.3 (Compose/HTTPS-Laufzeitnachweis) bleibt auf einem Docker-Host nachzuholen; unabhängig von Phase 3.
 - Rate-Limiting für `add_to_list`: RLS + Auth decken Missbrauch im Haushaltskontext ab; ein Caddy-Limit bleibt Teil von T1.3/T5.3.
+
+---
+
+## Anhang C — Welle 4: Phase 4 (PWA, Offline-Härtung & UX) — Kartenschnitt und prüfbare AKs
+
+_Ergänzung von architect (Datum: 2026-10-26). Additiv: §0–§7, Anhang A und Anhang B bleiben unverändert maßgeblich; die AKs in §5 bleiben die verbindliche Kurzform, dieser Anhang präzisiert sie auf Prüf-Ebene._
+
+### C.1 Ausgangslage
+
+- Phase 2 und 3 sind fertig und QA-abgenommen (`docs/REVIEW.md`, Welle 3 bestanden; Befunde D9–D14 dokumentiert).
+- PWA-Grundlage fehlt vollständig: `apps/web/public/` enthält nur `.gitkeep` — kein Manifest, kein Service Worker, kein Install-Prompt.
+- Sync-Status und Dead-Letter-Zählung existieren bereits (`apps/web/lib/sync/status.ts`, `worker.ts`, `repository.ts`): Zustände synced/pending/syncing/offline/error, `deadLetterCount`, Retry per Badge-Tap. Es fehlen Backoff-Wartezeiten und eine echte Dead-Letter-Liste mit Aktionen.
+- Im Mock-Auth-Modus (`NEXT_PUBLIC_AUTH_MOCK=true`) ist der Sync-Adapter ein No-op (`LocalOnlySyncAdapter`). Zwei Geräte können daher aktuell nicht konvergieren; das PLAN-AK „zwei Geräte offline, dann online“ ist ohne eine dev-only Sync-Gegenstelle nicht prüfbar.
+- axe/Barrierefreiheitsprüfung ist nicht vorhanden; Dark Mode existiert nur über `prefers-color-scheme` (kein Toggle/Persistenz); Swipe-Gesten fehlen; `build` ist in `ci.yml` inzwischen real (Web/Core haben Build-Skripte).
+
+### C.2 Karten und Abhängigkeiten
+
+| Karte           | ID           | Profil   | Inhalt                                                                                                          | Abhängig von            |
+| --------------- | ------------ | -------- | --------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| T4.1 PWA        | `t_4e27c239` | frontend | Manifest, Icons, Service Worker (App-Shell + SWR), Registrierung, Install-Prompt, Offline-Fallback             | — (parallel zu T4.2a)   |
+| T4.2a Mock-Sync | `t_bba90d6d` | frontend | Dev-only In-Memory-Sync-Server + Mock-Adapter + Mock-Realtime (Polling); Status-Modus                          | — (parallel zu T4.1)    |
+| T4.2b Offline-E2E | `t_18741bd9` | qa     | Playwright `e2e/offline.spec.ts`: „Supermarkt ohne Netz“ + „zwei Geräte offline, dann online“                 | T4.1, T4.2a             |
+| T4.3a Backoff   | `t_28db1c12` | core     | `nextRetryDelayMs`, Jitter, `next_attempt_at`, Dead-Letter nach maxAttempts (packages/core)                    | —                       |
+| T4.3b DLQ-UI    | `t_e8af35e9` | frontend | Worker respektiert Backoff; DeadLetterPanel mit „Erneut versuchen“/„Verwerfen“; Statusaktualisierung          | T4.3a, T4.2a            |
+| T4.4+4.5 UX/Mobile | `t_d230d8e6` | frontend | Dark Mode (System+Toggle), Responsive, Empty States, Skeletons, Micro-Interactions; Touch ≥44 px, Eingabe unten, Enter-Fokus, Autovervollständigung, Swipe; ≤2 Taps | T4.1 |
+| T4.6 A11y/axe  | `t_e07f902e` | frontend | Kontrast/Fokus/Labels; axe-Check in bestehender E2E-Suite (CI)                                                  | T4.4+4.5                |
+
+**Kein devops-Auftrag:** `ci.yml` (lint/typecheck/test/build) und `e2e.yml` (Playwright, `testDir ./e2e`) decken die neuen Karten automatisch ab; axe läuft als zusätzliche Spec in derselben Suite. Kein Workflow-Umbau nötig. Reale Supabase-Läufe (PostgREST/Realtime) bleiben auf einem Docker-Host nachzuholen (analog D14).
+
+### C.3 Prüfbare Akzeptanzkriterien
+
+| #   | Feature (Plan-ID)        | Testbares Akzeptanzkriterium                                                                                                                                                                                                                                                                    | Nachweis / Artefakt                                                                                       |
+| --- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| C-1 | PWA-Grundlage (T4.1)     | Manifest valide (name, short_name, start_url `/`, display standalone, Icons 192/512 + maskable); SW kontrolliert die Seite, App-Shell offline ladbar; `/rest/v1/*`, `/auth/v1/*`, `/api/*` nicht gecacht; Install-Prompt vorhanden/ausblendbar; Lighthouse-Installability-Audits bestanden. | Lighthouse-Report-Auszug + `e2e/pwa.spec.ts` in beiden Projekten; `docs/TESTLOG-T4.1.md`                  |
+| C-2 | Mock-Sync/Realtime (T4.2a) | Zwei Clients gegen denselben Dev-Server konvergieren nach Sync (< 5 s); Upsert idempotent; `add_to_list` gleiche `request_id` ohne Doppelmenge; Supabase-Pfad unverändert.                                                                                                                       | Integrationstest mit zwei Adaptern + Server-Handler; `docs/TESTLOG-T4.2a.md`                              |
+| C-3 | Offline-E2E (T4.2)       | Szenario A: offline hinzufügen/abhaken/löschen, Offline-Reload rendert App-Shell, Daten aus Dexie vorhanden, Reconnect → pending 0 und Serverzeilen korrekt. Szenario B: zwei Kontexte offline, dann online → beide sehen beide Änderungen, keine Duplikate/Verluste.                          | `e2e/offline.spec.ts`, 2 Szenarien × 2 Projekte grün; `docs/TESTLOG-T4.2.md`                              |
+| C-4 | Backoff-Policy (T4.3a)   | `nextRetryDelayMs`: 1/2/4/8/16 s, Cap 60 s, Jitter ±20 % deterministisch prüfbar; `next_attempt_at` gesetzt; Dead-Letter nach 5 Versuchen; Idempotenz/Delete-gewinnt unverändert.                                                                                                              | ≥10 Unit-Tests; packages/core gesamt grün; Commit-Nachweis                                                |
+| C-5 | Sync-Fehler + Dead-Letter (T4.3) | Automatischer Timer überspringt Einträge bis `next_attempt_at`, manueller Trigger/Reconnect versucht sofort; Panel listet dauerhaft fehlgeschlagene Einträge mit Fehlertext/Versuchen und Aktionen „Erneut versuchen“/„Verwerfen“; Status aktualisiert; leerer Zustand.                     | Worker-/Repository-Unit-Tests + Playwright-UI-Nachweis; `docs/TESTLOG-T4.3.md`                            |
+| C-6 | UI-Polish + Mobile (T4.4/T4.5) | Dark Mode (Hell/Dunkel/System) persistiert nach Reload, kein Flash; Systemmodus folgt `prefers-color-scheme`; keine horizontale Scrollbar bei 320 px; Safe-Area für Eingabefeld; Empty States + Skeletons; `prefers-reduced-motion` respektiert; Touch-Ziele ≥44 px; Eingabe unten erreichbar; Enter bleibt im Feld; Autovervollständigung aus Historie; Swipe abhaken/löschen; Artikel in ≤2 Taps. | `e2e/ui-polish.spec.ts` in beiden Projekten + Schrittfolge im Testlog; `docs/TESTLOG-T4.4-4.5.md`         |
+| C-7 | Barrierefreiheit (T4.6)  | axe auf Login/Liste/Rezepte/Haushalt: 0 serious/critical; sichtbarer Fokusring; Labels für Inputs/Icon-Buttons; Textkontrast ≥4,5:1; `aria-live` für Sync-Status/Fehler.                                                                                                                        | `e2e/a11y.spec.ts` in beiden Projekten; `docs/TESTLOG-T4.6.md`                                            |
+| C-8 | Querschnitt (alle Karten) | `pnpm lint && pnpm typecheck && pnpm test && pnpm build` grün; bestehende E2E-Suite ohne Regression; keine Secrets; keine Produktiv-Änderung an `supabase/`; PLAN-Checkboxen T4.1–T4.6 durch die umsetzenden Karten getickt.                                                                      | CI-Lauf + Commit-Nachweise                                                                                |
+
+### C.4 Entscheidungen
+
+- **Mock-Sync statt echtem Supabase-E2E (T4.2a):** In dieser Sandbox läuft kein Docker-Daemon; ein echter PostgREST/Realtime-Stack ist nicht startbar. Statt das PLAN-AK zu verschieben, wird eine dev-only In-Memory-Sync-Gegenstelle gebaut (Präzedenz: `app/api/mock/household`), gegen die zwei Browser-Kontexte real konvergieren. Der echte Supabase-Lauf bleibt als offener Umgebungspunkt dokumentiert.
+- **T4.3 geteilt:** Reine Backoff-Logik gehört in `packages/core` (framework-frei, unit-testbar) → `t_28db1c12`; Worker-Verdrahtung und Dead-Letter-UI sind Web-Code → `t_e8af35e9`. Ein Profil pro Karte, Abhängigkeit explizit.
+- **T4.4 + T4.5 in einer Karte:** Beide ändern dieselben UI-/CSS-Pfade (Liste, Eingabefeld, Layout); getrennte Karten würden parallel dieselben Dateien bearbeiten (Kollisions-Hotspot). Eine frontend-Karte, zwei Checkboxen.
+- **T4.6 ohne devops-Karte:** axe wird als zusätzliche Playwright-Spec in `e2e/` abgelegt; `e2e.yml` führt bereits `playwright test` über `./e2e` aus. Damit ist der geforderte „axe-Check in CI“ ohne Workflow-Änderung erfüllt; A11y-Fixes bleiben frontend.
+- **Kein Push-Benachrichtigungs-Scope:** bleibt Out-of-Scope (`docs/BACKLOG.md`).
+
+### C.5 Offene Punkte (nicht blockierend für Welle 4)
+
+- Echter Supabase-E2E-Lauf (PostgREST/Realtime, zwei Geräte) bleibt auf einem Docker-Host nachzuholen (analog D14); der Mock-Sync-Nachweis ersetzt ihn in dieser Umgebung.
+- T1.3 (Compose/HTTPS-Laufzeitnachweis) weiterhin offen; für Installation/PWA im echten Betrieb ist HTTPS Voraussetzung — localhost gilt als sicherer Kontext für Lighthouse/Playwright.
+- Lighthouse-Version: Ab Lighthouse 12 gibt es keine „PWA“-Kategorie mehr; C-1 präzisiert daher auf die Installability-Audits.
