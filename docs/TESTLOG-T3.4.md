@@ -1,6 +1,6 @@
 # Testlog T3.4-UI — „Auf die Einkaufsliste“-Vorschau-Dialog
 
-**Commit:** `502d6fa` (lokal, nicht gepusht)
+**Commit:** `502d6fa` → gepusht als `1ce0cdc`
 **Datum:** 2026-10-26
 **Scope:** `apps/web` (Dialog, Transfer-Logik, Vitest, E2E) — keine Änderungen an
 `packages/core` oder `supabase/migrations`.
