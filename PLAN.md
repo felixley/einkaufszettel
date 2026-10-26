@@ -125,7 +125,7 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
 
 ### Phase 3 – Rezepte & Smart-Import
 
-- [ ] **T3.1** `packages/core/units`: Parser („250 g“, „1,5 EL“, „½ TL“, „1 Prise“), Konverter, Formatter, Aggregator (4.3). _AK:_ ≥40 Unit-Tests inkl. Randfälle (Bruchzahlen, Komma, nicht konvertierbar).
+- [x] **T3.1** `packages/core/units`: Parser („250 g“, „1,5 EL“, „½ TL“, „1 Prise“), Konverter, Formatter, Aggregator (4.3). _AK:_ ≥40 Unit-Tests inkl. Randfälle (Bruchzahlen, Komma, nicht konvertierbar).
 - [ ] **T3.2** Rezept-CRUD inkl. Zutatenliste, Tags/Kategorien, Suche. _AK:_ Offline-fähig über dieselbe Dexie/Outbox-Schicht.
 - [ ] **T3.3** Portionsrechner (Skalierung, Rundung, sinnvolle Anzeige). _AK:_ 4→6 Portionen skaliert korrekt; Unit-Test.
 - [ ] **T3.4** „Auf die Einkaufsliste“: Vorschau-Dialog mit Zutaten-Checkboxen, Portionswahl, Hinweis „bereits auf Liste (+Menge)“, Aktion über RPC `add_to_list`. _AK:_ E2E: Rezept zweimal übertragen → Mengen addiert; inkompatible Einheit → eigene Zeile; `source_recipe_id` gesetzt.

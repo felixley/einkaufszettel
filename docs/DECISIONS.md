@@ -203,3 +203,48 @@ public.categories` → **13**, `category_rules` → **389**; zweiter
   (77/77) und den Gesamtlauf 184/184 (`docs/TESTLOG-T2.3-T2.4.md`).
   Das Frontend erzeugt Token, Link und QR clientseitig; fuer die
   Rate-Limiting-Anforderung aus PLAN.md §4.5 bleibt Caddy zustaendig (T1.3).
+
+## 2026-10-26 — Einheiten-Logik (T3.1) und Portionsskalierung (T3.3-Logik)
+
+- **Entscheidung 1 — Parser:** `parseIngredientLine` erkennt Menge/Einheit vor
+  oder nach dem Namen, gemischte Zahlen („2 1/2“), Unicode-Brüche, Komma **und**
+  Punkt als Dezimaltrenner sowie kompakte Schreibweisen („250g“, „1,5EL“).
+  Führende Näherungen (`ca.`, `etwa`, `~`) werden entfernt. Einheiten-Aliasse
+  inkl. Pluralformen (Dosen, Packungen, Zehen, Prisen) werden auf den
+  `unit_enum` abgebildet; bei mehreren Einheiten-Tokens gewinnt die erste
+  Einheit nahe der Menge. Begründung: echte Rezepttexte sind unsauber; die
+  Tests decken die in B-1 genannten Formen ab. Risiko: Einheitenwörter, die
+  zugleich Artikelnamen sind (z. B. „Dose“), werden als Einheit gelesen — für
+  den Import akzeptabel, weil die Menge dann eindeutig ist.
+- **Entscheidung 2 — Formatter:** Automatische Umrechnung nur zwischen den
+  Basiseinheiten einer Dimension (g↔kg, ml↔l); TL/EL und Stück-Einheiten
+  bleiben unverändert, damit Rezeptangaben lesbar bleiben. Volumen wechselt ab
+  500 ml nach l (500 ml → „0,5 l“), Masse ab 1000 g nach kg. Ausgabe mit
+  deutschem Komma, max. 2 Nachkommastellen, ohne trailing zeros; deutsche
+  Pluralform für Dose/Packung/Zehe/Prise. Risiko: „1 EL“ und „15 ml“ werden
+  unterschiedlich angezeigt; die Semantik bleibt gleich.
+- **Entscheidung 3 — Aggregator:** Gruppenschlüssel ist normalisierter Name +
+  Dimension; bei Stück-/unbestimmten Einheiten zählt zusätzlich die Einheit
+  (1 Bund ≠ 1 Stk). Innerhalb von Masse/Volumen wird in die Einheit des ersten
+  Eintrags umgerechnet. `null`-Mengen verschmelzen nur bei identischer Einheit;
+  sonst entsteht eine eigene Zeile mit `hint` („Andere Dimension …“ bzw.
+  „Nicht konvertierbare Einheit …“). `mergedCount` dokumentiert die Anzahl der
+  eingeflossenen Einträge. Keine Mutation der Eingabe.
+- **Entscheidung 4 — Portionsskalierung:** `scaleRecipe` nutzt `target/base`;
+  Masse/Volumen werden in der Basiseinheit auf ganze g/ml gerundet und zurück
+  gerechnet, Stück-/unbestimmte Einheiten auf 0,5 Schritte. `null` bleibt
+  `null`. Der 4→6-Fall ist mit Unit-Tests abgedeckt. Das T3.3-Checkbox bleibt
+  offen, bis die UI den Rechner tatsächlich nutzt (Vorgabe der Karte).
+- **Entscheidung 5 — `AddToListRequest`/Sync-Typen:** `source_recipe_id` und
+  `note` sind optional; beim Anlegen werden beide gesetzt. Beim Aggregieren in
+  eine bestehende Zeile ohne Rezept wird `source_recipe_id` nachgetragen (inkl.
+  Feld-Zeitstempel), eine vorhandene ID bleibt erhalten; `note` bleibt
+  unverändert. `ListTable` ist jetzt eine Union aus `list_items`, `recipes` und
+  `recipe_ingredients`; Row-Typen und `SyncRowData` typisieren Rezepte als
+  Outbox-Tabellen, ohne Sync-Logik zu duplizieren.
+- **Risiko/Status:** `units.test.ts` + `recipe.test.ts` decken Parser,
+  Formatter, Aggregator und Skalierung mit ≥40 Tests ab (Gesamtlauf Core:
+  146/146 grün; Gesamtprojekt 210/210). Build, Typecheck, ESLint/Prettier für
+  `packages/core` grün. Projektweiter `pnpm lint` meldet derzeit nur
+  Formatierung in `apps/web/lib/recipes/ingredient-line.ts` (parallele
+  Frontend-Karte, außerhalb dieses Scopes).

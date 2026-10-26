@@ -1,5 +1,12 @@
 import { normalizeName } from './name.js';
-import type { IsoTimestamp, ListItem, ListItemFields, RowId, Unit } from './types.js';
+import type {
+  FieldTimestamps,
+  IsoTimestamp,
+  ListItem,
+  ListItemFields,
+  RowId,
+  Unit,
+} from './types.js';
 import { convertQuantity, roundQuantity, unitDimension } from './units.js';
 
 /**
@@ -15,6 +22,10 @@ export interface AddToListRequest {
   name: string;
   quantity: number;
   unit: Unit | null;
+  /** Ursprungsrezept, falls der Artikel aus einem Rezept stammt (T3.4). */
+  source_recipe_id?: string | null;
+  /** Freitext-Notiz, die beim Anlegen an die Zeile gehängt wird. */
+  note?: string | null;
 }
 
 export interface AddToListContext {
@@ -106,11 +117,21 @@ export function addToList(
       return createRow(rows, request, normalizedName, context, applied);
     }
     const quantity = roundQuantity((target.fields.quantity ?? 0) + converted);
+    const fields: ListItemFields = { ...target.fields, quantity };
+    const fieldTimestamps: FieldTimestamps<ListItemFields> = {
+      ...target.field_updated_at,
+      quantity: context.now,
+    };
+    // Rezept-ID nur nachtragen, wenn die Zeile noch keine hat (T3.4).
+    if (target.fields.source_recipe_id === null && request.source_recipe_id != null) {
+      fields.source_recipe_id = request.source_recipe_id;
+      fieldTimestamps.source_recipe_id = context.now;
+    }
     const affected: ListItem = {
       ...target,
       updated_at: context.now,
-      field_updated_at: { ...target.field_updated_at, quantity: context.now },
-      fields: { ...target.fields, quantity },
+      field_updated_at: fieldTimestamps,
+      fields,
     };
     return {
       rows: rows.map((row) => (row.id === target.id ? affected : row)),
@@ -140,8 +161,8 @@ function createRow(
     category_id: null,
     checked: false,
     checked_by: null,
-    source_recipe_id: null,
-    note: null,
+    source_recipe_id: request.source_recipe_id ?? null,
+    note: request.note ?? null,
   };
   const fieldTimestamps: Record<string, IsoTimestamp> = {};
   for (const key of Object.keys(fields)) fieldTimestamps[key] = context.now;

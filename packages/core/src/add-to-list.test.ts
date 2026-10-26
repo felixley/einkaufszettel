@@ -181,4 +181,43 @@ describe('addToList (RPC-Mengenaggregation)', () => {
     expect(() => addToList([], { ...baseRequest, request_id: ' ' }, context())).toThrow(TypeError);
     expect(() => addToList([], { ...baseRequest, list_id: '' }, context())).toThrow(TypeError);
   });
+
+  it('setzt source_recipe_id und note beim Anlegen', () => {
+    const request: AddToListRequest = {
+      ...baseRequest,
+      source_recipe_id: 'recipe-9',
+      note: 'aus Rezept',
+    };
+    const outcome = addToList([], request, context());
+
+    expect(outcome.rows[0]?.fields.source_recipe_id).toBe('recipe-9');
+    expect(outcome.rows[0]?.fields.note).toBe('aus Rezept');
+  });
+
+  it('lässt source_recipe_id und note standardmäßig null', () => {
+    const outcome = addToList([], baseRequest, context());
+
+    expect(outcome.rows[0]?.fields.source_recipe_id).toBeNull();
+    expect(outcome.rows[0]?.fields.note).toBeNull();
+  });
+
+  it('trägt die Rezept-ID beim Aggregieren in eine Zeile ohne Rezept nach', () => {
+    const base = makeListItem({ quantity: 1, unit: 'l', source_recipe_id: null });
+    const request: AddToListRequest = { ...baseRequest, source_recipe_id: 'recipe-9' };
+
+    const outcome = addToList([base], request, context());
+
+    expect(outcome.rows).toHaveLength(1);
+    expect(outcome.rows[0]?.fields.source_recipe_id).toBe('recipe-9');
+    expect(outcome.rows[0]?.field_updated_at.source_recipe_id).toBe(T2);
+  });
+
+  it('behält eine bestehende Rezept-ID beim Aggregieren', () => {
+    const base = makeListItem({ quantity: 1, unit: 'l', source_recipe_id: 'recipe-alt' });
+    const request: AddToListRequest = { ...baseRequest, source_recipe_id: 'recipe-neu' };
+
+    const outcome = addToList([base], request, context());
+
+    expect(outcome.rows[0]?.fields.source_recipe_id).toBe('recipe-alt');
+  });
 });

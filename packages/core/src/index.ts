@@ -1,6 +1,7 @@
 export * from './types.js';
 export * from './time.js';
 export * from './units.js';
+export * from './recipe.js';
 export * from './name.js';
 export * from './conflict.js';
 export * from './outbox.js';
