@@ -4,7 +4,7 @@
 # =============================================================================
 # Baut eine Wegwerf-Datenbank auf einer bereits laufenden PostgreSQL-Instanz
 # auf, spielt Supabase-Shim + pgTAP + alle Migrationen + Seed ein und fuehrt
-# beide pgTAP-Suiten aus. Gedacht fuer Sandboxes/CI ohne Docker-Daemon.
+# alle pgTAP-Suiten aus. Gedacht fuer Sandboxes/CI ohne Docker-Daemon.
 #
 # Voraussetzungen (per Env-Variable konfigurierbar):
 #   PGROOT  Verzeichnis mit client/ (psql) und pgsrv/ (Server-Bibliotheken)
@@ -60,18 +60,19 @@ say "3. pgTAP laden"
 echo ok
 
 # 001/002 sind Basisschema-Migrationen (CREATE TYPE/TABLE/TRIGGER) und laufen
-# genau einmal pro Datenbank. 003-006 sind funktionale Migrationen und muessen
+# genau einmal pro Datenbank. 003-008 sind funktionale Migrationen und muessen
 # idempotent sein (CREATE OR REPLACE / DROP IF EXISTS) — sie laufen zweimal.
 say "4a. Basisschema 001 + 002 (einmalig)"
 run_sql "$REPO/supabase/migrations/20261025_001_schema.sql" "Migration 001_schema" || exit 1
 run_sql "$REPO/supabase/migrations/20261025_002_rls.sql"    "Migration 002_rls"    || exit 1
 
-say "4b. Funktionale Migrationen 003-006 (je zweimal = Idempotenz)"
+say "4b. Funktionale Migrationen 003-008 (je zweimal = Idempotenz)"
 for m in 20261025_003_rpc_household_lists.sql \
          20261025_004_fix_lists_rls.sql \
          20261025_005_invites_and_members.sql \
          20261025_006_fix_household_members_rls.sql \
-         20261025_007_sync_auth_profiles.sql; do
+         20261025_007_sync_auth_profiles.sql \
+         20261025_008_add_to_list_rpc.sql; do
   run_sql "$REPO/supabase/migrations/$m" "Migration $m (1. Lauf)" || exit 1
   run_sql "$REPO/supabase/migrations/$m" "Migration $m (2. Lauf = Idempotenz)" || exit 1
 done
@@ -85,7 +86,7 @@ run_sql "$REPO/supabase/seed.sql" "Seed (2. Lauf = Idempotenz)" || exit 1
 # SQL-Fehler ("ERROR:") geprueft — sonst meldet der Lauf faelschlich gruen.
 RC=0
 n=6
-for t in 01_rls 02_rpc_household_lists 03_invites_and_members 04_profiles_sync; do
+for t in 01_rls 02_rpc_household_lists 03_invites_and_members 04_profiles_sync 05_add_to_list; do
   say "$n. pgTAP $t"
   LOG="/tmp/ez_verify_${t}.log"
   "$PSQL" -h "$SOCK" -p "$PORT" -U "$DBUSER" -d "$DB" -f "$REPO/supabase/tests/$t.sql" > "$LOG" 2>&1
