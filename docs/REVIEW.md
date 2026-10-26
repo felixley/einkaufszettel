@@ -763,3 +763,57 @@ Status nach Behebung der E2E-Befunde. Alle Läufe in dieser Sandbox, Mock-Modus 
 **Dokumentierte Test-Abweichung Mock-CI:** Im Mock-Modus gibt es keinen Server und keine geteilte Session zwischen Browser-Kontexten. Der A-6-Test nutzt dort zwei Tabs **eines** Kontexts; beide teilen IndexedDB, und Dexie `liveQuery` propagiert Änderungen über BroadcastChannel. Die Latenz-Assertion misst damit den realen UI-Propagationspfad, nicht den Netzwerkpfad. Gegen ein echtes Backend laufen zwei echte Browser-Kontexte mit Supabase-Realtime.
 
 **Qualitätsgates (2026-10-25):** `pnpm lint` grün, `pnpm typecheck` grün, `pnpm test` 163 Tests grün, `pnpm build` grün, `pnpm test:e2e` 24 Tests grün (0 skipped).
+
+## 10. QA-Abnahme Welle 3 (T3.1–T3.4, Anhang B)
+
+**Datum:** 2026-10-26
+**Maßstab:** `PLAN.md` §5 Phase 3 + Anhang B (B-1…B-6); `docs/BACKLOG.md`.
+**Geprüfte Karten:** `t_d6fc2927` (core, `735b06d`), `t_5fd3abeb` (backend, `b74795d`), `t_c10073d1` (frontend T3.2-UI, in `502d6fa` mitcommittet), `t_e8d5e9fe` (frontend T3.4-UI, `502d6fa`). `t_e8d5e9fe` konnte nicht mehr als Parent verlinkt werden, weil der QA-Lauf bereits gestartet war; sie wurde manuell mitgeprüft (Operator-Hinweis).
+
+### 10.1 Prüfumfang und Umgebung
+
+- Alle vier Karten sind `done`; HEAD = `1ce0cdc` (origin/master identisch, `git ls-remote` bestätigt).
+- Sandbox-Grenzen: kein Docker-Daemon, keine Supabase-CLI/PostgREST/Realtime. pgTAP daher gegen Vanilla PostgreSQL 16.2 + Supabase-Shim (`bootstrap.sql`, `pgtap_ready.sql`, Rollen `anon`/`authenticated`/`service_role`, `auth.uid()`); E2E im Mock-Auth-Modus wie im CI-Workflow. Das ist dieselbe dokumentierte Umgebungsgrenze wie in Welle 1/2 (D3/D8.5) und kein Welle-3-Blocker.
+
+### 10.2 Durchgeführte Tests mit echtem Output
+
+| Prüfung                      | Kommando                                                                                                     | Ergebnis                                                                                                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vitest gesamt                | `./node_modules/.bin/vitest run`                                                                             | **19 Dateien, 231/231 Tests grün**, exit 0                                                                                                                          |
+| Core-Scope (B-1)             | `vitest run packages/core`                                                                                   | **146/146 grün**; units 42 + recipe 10 = **52 Tests** (≥ 40)                                                                                                        |
+| pgTAP gesamt (B-3)           | `PGROOT=…/scratch/pg PGPORT=55432 … bash supabase/tests/run_local_verify.sh`                                 | **ALLE TESTS GRUEN**, **259 ok, 0 not ok**; Suite `05_add_to_list.sql` **58/58**                                                                                    |
+| E2E Rezept-CRUD (B-4)        | `playwright test e2e/recipes.spec.ts`                                                                        | **4 passed** (chromium + mobile-chromium)                                                                                                                           |
+| E2E Rezept-Transfer (B-5)    | `playwright test e2e/recipe-transfer.spec.ts`                                                                | **4 passed** (chromium + mobile-chromium)                                                                                                                           |
+| E2E Gesamtsuite (Regression) | `playwright test`                                                                                            | **32 passed** (2,2 min), inkl. A-6-Latenz **210 ms** (Mock/zwei Tabs)                                                                                               |
+| Typecheck (B-6)              | `tsc -p tsconfig.build.json` (core) + `tsc --noEmit -p tsconfig.json` (root/web)                             | exit 0 / 0 / 0                                                                                                                                                      |
+| Lint/Format (B-6)            | `eslint .` + `prettier --check "**/*.{js,mjs,cjs,ts,mts,cts,json,yml,yaml}"`                                 | exit 0 / 0 („All matched files use Prettier code style!“)                                                                                                           |
+| Build (B-6)                  | `next build` (apps/web)                                                                                      | exit 0, 11/11 statische Seiten                                                                                                                                      |
+| Secrets/DB-Änderungen (B-6)  | `git log -p ff2a269..HEAD -- . ':!docs' ':!*.md' \| grep -iE "secret\|api[_-]?key\|password\|bearer\|token"` | nur Test-Konstante `PASSWORD = 'geheim1234'`; keine Secrets; DB-Änderung ausschließlich Migration `20261025_008_add_to_list_rpc.sql` (`security invoker` bestätigt) |
+
+### 10.3 Urteil je Kriterium (Anhang B)
+
+| #   | Kriterium               | Urteil        | Begründung / Nachweis                                                                                                                                                                                                                                              |
+| --- | ----------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| B-1 | Einheiten-Logik         | **bestanden** | 52 Tests im Units-/Recipe-Scope; Parser deckt „250 g“, „1,5 EL“, „½ TL“, „¼ l“, „2 1/2 Stk“, „1 Prise“, „n. B.“, „2 Dosen“; Formatter `1500 g → 1,5 kg`, `0.25 l → 250 ml`, Stück nie umgerechnet; Aggregator Name+Dimension, inkompatibel = eigene Zeile.         |
+| B-2 | Portionsskalierung      | **bestanden** | `scaleRecipe` 4→6: 200 g→300 g, 2 Stk→3 Stk, 1 l→1,5 l, `null` bleibt `null`; Masse/Volumen auf 1 g/ml, Stück auf 0,5 gerundet.                                                                                                                                    |
+| B-3 | `add_to_list`-RPC       | **bestanden** | `SECURITY INVOKER`; Replay `duplicate=true` ohne Doppel-Add; gleicher Name+Dimension atomar summiert; inkompatible Einheit neue Zeile; `source_recipe_id` gesetzt; Viewer/Nichtmitglied schreiben nicht (pgTAP 44–57); anon ohne EXECUTE/Ledger-Zugriff.           |
+| B-4 | Rezept-CRUD offline     | **bestanden** | `recipes.spec.ts` 4/4 in beiden Projekten: anlegen/bearbeiten/suchen (Titel **und** Tags)/löschen+Undo; offline angelegtes Rezept synchronisiert nach Reconnect; Schreibpfade Dexie→Outbox.                                                                        |
+| B-5 | „Auf die Einkaufsliste“ | **bestanden** | `recipe-transfer.spec.ts` 4/4 in beiden Projekten: 1. Übertragung 6 Portionen → 750 g; 2. Übertragung → **eine** Zeile 1250 g; Hinweis „Bereits auf Liste … wird zu 1,25 kg“; Eier 1 kg + 2 Stk → **zwei** Zeilen; `source_recipe_id` per Dexie-Assertion gesetzt. |
+| B-6 | Querschnitt             | **bestanden** | Lint, Typecheck, 231 Vitest-Tests, Build grün; keine Secrets; DB-Änderung nur als Migration; RLS für neue Schreibpfade aktiv (Ledger + RPC über bestehende `list_items`/`recipes`-Policies, pgTAP bestätigt).                                                      |
+
+**T3.5 (Vorratsliste):** Zurückstellung ist regelkonform — Anhang B.4 begründet > 1 Tag Aufwand, `PLAN.md` §5 erlaubt „nur wenn Aufwand <1 Tag“, Eintrag in `docs/BACKLOG.md` vorhanden.
+
+### 10.4 Befunde / Defekte (alle nicht blockierend)
+
+- **D9 — [niedrig] DoD/Plan-Checkbox T3.2 nicht abgehakt.** `PLAN.md` Zeile 129 führt T3.2 weiter als `[ ]`, obwohl Rezept-CRUD inkl. Suche/Tags und Offline-Sync implementiert und per E2E (`recipes.spec.ts`, 4/4) belegt ist. Reine Dokumentationslücke; Empfehlung: Checkbox nachziehen.
+- **D10 — [niedrig] Touch-Ziel „Alle/Keine“ 46,4 px statt ≥ 48 px.** `.bulkBtn` in `AddToShoppingListDialog.module.css` hat `min-height: 2.9rem` (= 46,4 px bei globalem `box-sizing: border-box`). Zeilen (56 px), Schließen/Stepper (48 px), Primär-/Sekundäraktionen (52/48 px) erfüllen die Vorgabe; nur die beiden Bulk-Buttons liegen 1,6 px darunter. `docs/TESTLOG-T3.4.md` formuliert „Touch-Ziele ≥ 48 px“ daher etwas zu pauschal.
+- **D11 — [niedrig/Info] Suchlogik doppelt und ungleich.** `searchRecipes` in `apps/web/lib/db/recipes.ts` durchsucht nur `tags`, während die Rezeptseite (`apps/web/app/recipes/page.tsx`) clientseitig Titel **und** Tags filtert. Die UI-Anforderung („Suche“) ist erfüllt; Empfehlung: Datenbankfunktion angleichen, damit kein späterer Aufrufer nur Tags findet.
+- **D12 — [Info] Markdown-Formatierung nicht durchgängig.** `prettier --check` über `**/*.md` meldet `docs/TESTLOG-T2.2.md`, `docs/TESTLOG-T3.2.md`, `docs/wireframes.md`. Der CI-Lint-Script prüft keine `.md`-Dateien, daher bleibt `pnpm lint` grün; `lint-staged` würde sie beim Commit formatieren, der Hook war in der Sandbox aber nicht ausführbar (pnpm fehlte).
+- **D13 — [Info] Testlog-Angabe „lokal, nicht gepusht“ veraltet.** `docs/TESTLOG-T3.4.md` nennt Commit `502d6fa` ungepusht; `origin/master` steht auf `1ce0cdc`, d. h. alle vier Welle-3-Commits sind bereits gepusht.
+- **D14 — [Info/Umgebungsgrenze] Kein Real-Backend-Lauf (PostgREST/Supabase).** Der Supabase-Modus der Übertragung (Outbox → `supabase.rpc('add_to_list')`) ist durch Unit-Tests (`transfer.test.ts`, 12 Fälle) und den pgTAP-RPC-Nachweis abgedeckt, aber nicht Ende-zu-Ende gegen einen echten PostgREST-Stack. Gleiche Grenze wie D8.5; auf einem Docker-/Supabase-Host nachzuholen.
+
+### 10.5 Gesamturteil Welle 3
+
+**Bestanden.** Alle prüfbaren AKs B-1…B-6 sind mit echtem Tool-Output belegt; die vier Karten erfüllen ihre Spezifikation, die E2E-Suite ist mit 32/32 grün (inkl. Doppelübertragung, inkompatibler Einheit, Offline-Reconnect und `source_recipe_id`). Die Befunde D9–D14 sind niedrigschwellig bzw. Informations-/Umgebungspunkte und blockieren die Abnahme nicht. Die Zurückstellung von T3.5 ist regelkonform.
+
+**Offene Punkte (nicht Welle-3-blockierend):** D14 Real-Backend-E2E; T1.3 (Compose/HTTPS-Laufzeitnachweis) aus Welle 1 bleibt auf einem Docker-Host nachzuholen.
