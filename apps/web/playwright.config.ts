@@ -74,6 +74,9 @@ export default defineConfig({
       NEXT_PUBLIC_AUTH_MOCK: 'true',
       NEXT_PUBLIC_SUPABASE_URL: '',
       NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
+      // Bestehende E2E-Suite ohne Service Worker fahren; `e2e/pwa.spec.ts`
+      // erzwingt die Registrierung gezielt per `?sw=on`.
+      NEXT_PUBLIC_PWA_DISABLED: 'true',
     },
   },
 });
