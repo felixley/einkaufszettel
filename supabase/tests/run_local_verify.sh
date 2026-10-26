@@ -86,7 +86,7 @@ run_sql "$REPO/supabase/seed.sql" "Seed (2. Lauf = Idempotenz)" || exit 1
 # SQL-Fehler ("ERROR:") geprueft — sonst meldet der Lauf faelschlich gruen.
 RC=0
 n=6
-for t in 01_rls 02_rpc_household_lists 03_invites_and_members 04_profiles_sync 05_add_to_list; do
+for t in 01_rls 02_rpc_household_lists 03_invites_and_members 04_profiles_sync 05_add_to_list 06_rls_policy_gaps; do
   say "$n. pgTAP $t"
   LOG="/tmp/ez_verify_${t}.log"
   "$PSQL" -h "$SOCK" -p "$PORT" -U "$DBUSER" -d "$DB" -f "$REPO/supabase/tests/$t.sql" > "$LOG" 2>&1

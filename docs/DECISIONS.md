@@ -371,3 +371,32 @@ projektweiter Umbau und nicht Teil von T4.3.
   xcaddy-Build, `caddy validate`, echte Header- und 429-Läufe sind in der
   Sandbox ohne Docker-Daemon nicht möglich und bleiben offener Docker-Host-
   Nachweis (analog D14/T1.3). Details: `docs/SECURITY.md`.
+
+## 2026-10-26 — T5.3a: RLS-Abdeckung nur ergänzt (Tests/Doku), keine Migrationsänderung
+
+- **Entscheidung:** Für T5.3a werden ausschließlich neue pgTAP-Tests und Doku
+  ergänzt; die Migrationslogik bleibt unverändert (Vorgabe der Karte). Neue
+  Suite `supabase/tests/06_rls_policy_gaps.sql` (91 Assertions) schließt die
+  Abdeckungslücken der direkten DML-Policies aller 10 Domänentabellen plus
+  Ledger; `run_local_verify.sh` referenziert sie. Ergebnis: **350 Assertions,
+  6 Suiten, grün** (45+62+77+17+58+91). Neue Matrix:
+  `docs/SECURITY-RLS-COVERAGE.md`.
+- **Befund (Restlücke R1, dokumentiert statt gefixt):** Soft-Delete per
+  `UPDATE` ist auf `categories`, `category_rules`, `recipes`,
+  `recipe_ingredients`, `households`, `invites` durch die jeweilige
+  SELECT-Policy (`deleted_at IS NULL`) blockiert — dasselbe Muster, das in
+  004 (`lists`) und 006 (`household_members`) bereits behoben wurde. Im MVP
+  ist für diese Tabellen kein Soft-Delete/Restore-Pfad gebaut (`invites` nutzt
+  `revoked_at`); sobald einer entsteht, bricht er. Empfehlung: Folge-Migration
+  nach dem 004/006-Muster. Weitere Restlücken (append-only Ledger ohne
+  `prevent_delete`-Trigger; `profiles_no_delete` nur end-to-end beobachtbar;
+  Rezepte ungebaut) sind mit Risiko in `SECURITY-RLS-COVERAGE.md` §6 geführt.
+- **Alternative:** Policy-Fix sofort mitliefern (verworfen — Karte verbietet
+  Migrationsänderungen; T5.3b koordiniert den gemeinsamen Abschluss).
+- **Risiko/Status:** Grün und reproduzierbar. **Korrektur der Sandbox-Annahme:**
+  Die Karte ging von „kein `psql`, kein `pg-shim`, Runner nicht ausführbar“
+  aus. Tatsächlich ist unter `/opt/data/profiles/backend/cache/scratch/pg/`
+  ein funktionierender Vanilla-PG-16.2-Shim vorhanden (Server auf Port 55432);
+  `run_local_verify.sh` läuft damit vollständig durch. Der echte
+  Supabase-/PostgREST-/GoTrue-Lauf auf einem Docker-Host bleibt offener
+  Umgebungsnachweis (analog D14).
