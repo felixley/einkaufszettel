@@ -391,15 +391,15 @@ baut PWA-Grundlage, Offline-Testbarkeit, Backoff/Dead-Letter, UX/Ergonomie und A
 
 **Karten-IDs (erstellt von architect):**
 
-| Karte             | ID           | Assignee | Abhängig von   |
-| ----------------- | ------------ | -------- | -------------- |
-| T4.1 PWA          | `t_4e27c239` | frontend | —              |
-| T4.2a Mock-Sync   | `t_bba90d6d` | frontend | —              |
-| T4.2b Offline-E2E | `t_18741bd9` | qa       | T4.1, T4.2a    |
-| T4.3a Backoff     | `t_28db1c12` | core     | —              |
-| T4.3b DLQ/Worker  | `t_e8af35e9` | frontend | T4.3a, T4.2a   |
-| T4.4+4.5 UX/Mobile| `t_d230d8e6` | frontend | T4.1           |
-| T4.6 A11y/axe     | `t_e07f902e` | frontend | T4.4+4.5       |
+| Karte              | ID           | Assignee | Abhängig von |
+| ------------------ | ------------ | -------- | ------------ |
+| T4.1 PWA           | `t_4e27c239` | frontend | —            |
+| T4.2a Mock-Sync    | `t_bba90d6d` | frontend | —            |
+| T4.2b Offline-E2E  | `t_18741bd9` | qa       | T4.1, T4.2a  |
+| T4.3a Backoff      | `t_28db1c12` | core     | —            |
+| T4.3b DLQ/Worker   | `t_e8af35e9` | frontend | T4.3a, T4.2a |
+| T4.4+4.5 UX/Mobile | `t_d230d8e6` | frontend | T4.1         |
+| T4.6 A11y/axe      | `t_e07f902e` | frontend | T4.4+4.5     |
 
 > **Hinweis zum Kartenschnitt:** Der Karten-Body ging beim Anlegen technisch verloren;
 > die vollständigen Spezifikationen (Ziel, Scope, Anforderungen, AK/Nachweis, Constraints,
@@ -529,3 +529,176 @@ baut PWA-Grundlage, Offline-Testbarkeit, Backoff/Dead-Letter, UX/Ergonomie und A
 - Echter Supabase-E2E-Lauf (PostgREST/Realtime) auf Docker-Host nachzuholen.
 - T1.3 (Compose/HTTPS-Laufzeitnachweis) weiterhin offen; HTTPS ist Voraussetzung für echte
   PWA-Installation, localhost gilt als sicherer Kontext für Lighthouse/Playwright.
+
+---
+
+## Welle 5 — Phase 5 „Test, Betrieb & Go-Live“ (`architect`, Karte `t_0ede60b2`)
+
+**Planungsstand 2026-10-26.** Maßgeblich bleiben `PLAN.md` §5 (T5.1–T5.4) und der neue
+**Anhang D** (Kartenschnitt + prüfbare AKs D-1…D-6). Phase 1–4 sind QA-abgenommen.
+**Human Gate 3 (Go-Live) bleibt beim PO**; T5.5 (Durchführung) und T5.6 (Release v1.0.0)
+sind bewusst **nicht** geschnitten. Die erlaubte T5.5-Vorbereitung ist als eigene Karte
+geschnitten. Kein Produktivcode, kein Release/Tagging in dieser Welle.
+
+### Karten-IDs (erstellt von architect)
+
+| Karte                        | ID           | Assignee | Abhängig von                     |
+| ---------------------------- | ------------ | -------- | -------------------------------- |
+| T5.1 E2E-Suite CI            | `t_1fb12e66` | frontend | —                                |
+| T5.2 k6-Lasttest             | `t_d87fc882` | core     | T5.1 (empfohlen; Link abgelehnt) |
+| T5.3a RLS-Abdeckung          | `t_5fb3079e` | backend  | —                                |
+| T5.3b Security-Baseline      | `t_0094b32d` | devops   | T5.3a (Checkbox-Abschluss)       |
+| T5.4 Betrieb                 | `t_cc7a72cf` | devops   | —                                |
+| T5.5-Vorbereitung Dogfooding | `t_ade04faa` | frontend | —                                |
+
+> **Hinweis zum Kartenschnitt:** Der Karten-Body von T5.1 ging beim Anlegen technisch
+> verloren; die vollständigen Spezifikationen (Ziel, Ist-Stand, Soll, AK, Sandbox-Grenze,
+> Pfade, Constraints, Abhängigkeiten, offene Fragen) liegen deshalb als **Kommentar** an
+> jeder Karte und sind dort maßgeblich. Mehrere Karten wurden vom Dispatcher sofort
+> gestartet, bevor die Verlinkung gesetzt war; `kanban_link` (T5.2 → T5.1) wurde mit
+> „child is already running“ abgelehnt. Die Abhängigkeit steht im Kommentar von T5.2;
+> falls T5.1 bei Bearbeitung von T5.2 nicht fertig ist, gilt `kanban_block(kind="dependency")`.
+
+### T5.1 E2E-Suite vollständig in CI (`frontend` · Karte `t_1fb12e66`)
+
+- **Ziel:** Playwright-Projekte `chromium`, `mobile-chromium` (bestehend), `webkit` und
+  `mobile-webkit` (iPhone 14/15); `e2e.yml` installiert Chromium+WebKit mit System-Deps;
+  alle 13 Specs laufen über alle Projekte; Bericht/Artefakte bei Fehlschlag.
+- **Akzeptanzkriterium:** Konfiguration enthält WebKit-Projekte; Workflow installiert beide
+  Engines; Chromium-Projekte in der Sandbox ohne Regression grün (68/68); WebKit-Konfig per
+  `playwright test --list` validiert; `docs/TESTLOG-T5.1.md`; PLAN-Checkbox T5.1.
+- **Betroffene Pfade:** `apps/web/playwright.config.ts`, `.github/workflows/e2e.yml`,
+  ggf. `apps/web/e2e/*.spec.ts` (projektbezogene Skips), `docs/TESTLOG-T5.1.md`.
+- **Constraints:** keine App-Verhaltensänderung; Chromium-Suite muss grün bleiben;
+  WebKit-spezifische App-Fehler nur dokumentieren (Folgekarte), nicht hier fixen; kein Docker.
+- **Abhängigkeiten:** keine.
+- **Offene Fragen:** keine.
+- **Sandbox-Grenze:** WebKit-Binary installierbar, aber Systemlibs (`libsecret`, `libhyphen`,
+  `libGLESv2`, `libx264`) fehlen → echter WebKit-Lauf ist offener CI-/Docker-Host-Nachweis.
+
+### T5.2 k6-Lasttest 10 Haushalte × 5 Nutzer (`core` · Karte `t_d87fc882`)
+
+- **Ziel:** `perf/k6-sync.js` mit 10 Haushalten × 5 VUs (50 VUs), Ramp-up, Thresholds
+  p95 < 1000 ms und Fehlerrate < 1 %; Szenarien Sync-Poll/Upsert und `add_to_list` mit
+  `request_id`-Idempotenz; `docs/PERF.md` mit Messwerten, Interpretation und
+  Reproduktionsanleitung für den Docker-/Supabase-Host.
+- **Akzeptanzkriterium:** Skript vorhanden, `k6 inspect`/Dry-Run grün; Lauf gegen den
+  Mock-Sync-Stack dokumentiert (p95 < 1 s, Fehlerrate < 1 %) **oder** als Host-Nachweis
+  offen; `docs/PERF.md`; PLAN-Checkbox T5.2.
+- **Betroffene Pfade:** `perf/k6-sync.js` (neu), `perf/README.md` (optional),
+  `docs/PERF.md` (neu), ggf. `package.json`-Script (kein Runtime-Dep).
+- **Constraints:** keine App-/Produktivcode-Änderung; Mock-Sync nur im Dev-Modus;
+  keine Secrets; keine Docker-Abhängigkeit im Skript.
+- **Abhängigkeiten:** T4.2a abgeschlossen; T5.1 empfohlen (nicht blockierend).
+- **Offene Fragen:** keine.
+- **Sandbox-Grenze:** k6 nicht installiert; Download versuchen. Echter 50-VU-Lauf gegen
+  Supabase bleibt offen (D14).
+
+### T5.3a RLS-Testabdeckung (`backend` · Karte `t_5fb3079e`)
+
+- **Ziel:** `docs/SECURITY-RLS-COVERAGE.md` als Matrix aller 10 Tabellen × Operationen ×
+  RPCs gegen die 5 pgTAP-Suiten; Lücken mit Tests schließen oder begründet dokumentieren;
+  neue Suite in `run_local_verify.sh` registrieren.
+- **Akzeptanzkriterium:** Matrix vollständig; jede Lücke Test oder begründete Restlücke;
+  `bash -n` grün; statische Prüfung belegt; echter pgTAP-Lauf als Docker-/PG-Host-Nachweis
+  offen. Checkbox T5.3 **nicht** hier ticken (T5.3b koordiniert).
+- **Betroffene Pfade:** `supabase/tests/*.sql`, `supabase/tests/run_local_verify.sh`,
+  `docs/SECURITY-RLS-COVERAGE.md` (neu), ggf. `docs/DECISIONS.md`.
+- **Constraints:** keine Migrationslogik ändern (nur Tests/Doku); pgTAP-Stil beibehalten;
+  keine Produktivdaten; keine Secrets.
+- **Abhängigkeiten:** keine.
+- **Offene Fragen:** keine.
+- **Sandbox-Grenze:** kein Docker/`psql`/`pg-shim` → Runner nicht ausführbar; statische
+  Matrix ist der Sandbox-Nachweis.
+
+### T5.3b Security-Baseline (`devops` · Karte `t_0094b32d`)
+
+- **Ziel:** CSP, HSTS, X-Frame-Options/frame-ancestors, Referrer-Policy,
+  Permissions-Policy, nosniff im Caddyfile; Rate-Limit-Zonen für `/auth/v1/*` und
+  `add_to_list` (Caddy-`rate_limit`-Plugin via xcaddy); `npm audit --omit=dev`;
+  `scripts/check-security-config.mjs` als Node-Konfigprüfung + CI-Einbindung;
+  `docs/SECURITY.md` mit Begründung und Host-Validierungsanleitung.
+- **Akzeptanzkriterium:** Header + Limit-Zonen vorhanden; Node-Prüfskript grün und in CI;
+  Audit dokumentiert; `docs/SECURITY.md`; Checkbox T5.3 nur nach T5.3a-Abschluss.
+- **Betroffene Pfade:** `caddy/Caddyfile`, `caddy/Dockerfile`,
+  `scripts/check-security-config.mjs` (neu), `.github/workflows/ci.yml`,
+  `docs/SECURITY.md` (neu), ggf. `docs/DECISIONS.md`.
+- **Constraints:** keine App-Verhaltensänderung außer Headern; CSP darf die
+  Chromium-E2E-Suite nicht brechen; keine Secrets; Plugin-Version pinnen.
+- **Abhängigkeiten:** T5.3a für den Checkbox-Abschluss; sonst unabhängig.
+- **Offene Fragen:** CSP-Strenge vs. Next.js-Inline-Scripts pragmatisch entscheiden und
+  begründen.
+- **Sandbox-Grenze:** kein Docker/`caddy`-Binary → `caddy validate` und echte
+  Header-/429-Läufe bleiben Docker-Host-Nachweis.
+
+### T5.4 Betrieb (`devops` · Karte `t_cc7a72cf`)
+
+- **Ziel:** Backup-Härtung (Retention, Integritätsprüfung), `restore.sh` +
+  `test-restore.sh` (Stub/Dry-Run und optional portables PostgreSQL), Update-Prozedur,
+  Healthcheck-Übersicht, Logrotation, Monitoring inkl. Cert-Expiry; `docs/OPERATIONS.md`
+  als Runbook.
+- **Akzeptanzkriterium:** Skripte vorhanden, `bash -n` grün; Restore-Test im Stub-/Dry-Run
+  grün oder als offener Docker-/PG-Host-Nachweis; Retention + Integritätsprüfung
+  implementiert; `docs/OPERATIONS.md`; Compose-Logging konfiguriert; PLAN-Checkbox T5.4.
+- **Betroffene Pfade:** `scripts/backup.sh`, `scripts/restore.sh` (neu),
+  `scripts/test-restore.sh` (neu), `scripts/check-cert-expiry.sh` (neu),
+  `scripts/backup.cron.example`, `docs/OPERATIONS.md` (neu), `docker-compose.yml`,
+  `README.md`, ggf. `caddy/README.md`.
+- **Constraints:** keine destruktiven Defaults (Restore nur mit explizitem Ziel +
+  Bestätigung); `backups/` bleibt gitignored; keine Secrets; Healthchecks nicht unnötig
+  verlangsamen.
+- **Abhängigkeiten:** keine; T5.3b empfohlen (finale Header/Limits), nicht blockierend.
+- **Offene Fragen:** Monitoring als optionaler Compose-Service (Uptime Kuma) vs. externe
+  Instanz — pragmatisch entscheiden und in `docs/OPERATIONS.md` begründen.
+- **Sandbox-Grenze:** kein Docker/`psql` → echter Restore-Lauf bleibt offen; Skripte müssen
+  stub-/dry-run-fähig sein.
+
+### T5.5-Vorbereitung Dogfooding (`frontend` · Karte `t_ade04faa`)
+
+- **Ziel:** `docs/DOGFOODING.md` (2-Wochen-Ablauf, Rollen, Kern-Testfälle, Known Issues,
+  Eskalation) und `docs/FEEDBACK.md` (Vorlage inkl. Schweregrad/Reproduktion).
+- **Akzeptanzkriterium:** beide Dokumente ohne weitere Erklärung nutzbar; keine
+  Code-/Produktivänderung; PLAN-Checkbox T5.5 **nicht** ticken (erst nach Gate 3).
+- **Betroffene Pfade:** `docs/DOGFOODING.md` (neu), `docs/FEEDBACK.md` (neu).
+- **Constraints:** keine Release-/Tagging-Aktion; kein Vorgriff auf Gate 3; keine erfundenen
+  Testergebnisse.
+- **Abhängigkeiten:** keine.
+- **Offene Fragen:** keine.
+- **Dokumente (Vorbereitung, Stand vor Gate 3):**
+  [`DOGFOODING.md`](DOGFOODING.md) — Ablauf 2 Wochen, Haushalte/Rollen, Kern-Testfälle
+  D1–D8 (Liste anlegen/teilen, offline im Supermarkt, Rezepte/Portionen, Einladung/Rollen,
+  Dark Mode/Mobile, PWA-Installation, Haushalts-Sichtbarkeit), Known Issues K1–K8 mit
+  Umgehungen, Abbruch-/Eskalationskriterien, Rhythmus der Feedback-Sichtung, Kickoff-Checkliste.
+  [`FEEDBACK.md`](FEEDBACK.md) — Vorlage (Datum, Haushalt/Rolle, Gerät, Szenario, Schweregrad,
+  Reproduktion, Erwartung/Ist, Häufigkeit, Screenshot-Hinweis, Status), Schweregrad-Definitionen,
+  fiktives Ausfüllbeispiel, Feedback-Log, Sichtungsprotokoll, Bugfix-Nachtest und Abschlussübersicht.
+  Beide Dokumente enthalten **keine Testergebnisse**; das Dogfooding selbst und die
+  Bugfix-Runde folgen erst nach Human Gate 3. Die PLAN-Checkbox **T5.5 bleibt offen**.
+
+### Entscheidungen (Welle 5)
+
+- **T5.1 bei `frontend`:** überwiegend Playwright-Konfiguration, projektbezogene Skips und
+  WebKit-Kompatibilität; der Eingriff in `e2e.yml` ist klein. `devops` bleibt für T5.3b/T5.4.
+- **T5.2 bei `core`:** framework-freies k6-Skript + Lasttest-Semantik (Idempotenz/Outbox);
+  `devops` ist mit T5.3b/T5.4 ausgelastet.
+- **T5.3 geteilt** in `3a` backend (supabase/tests + Abdeckungsdoku) und `3b` devops
+  (Caddy/CI/Security-Doku) — disjunkte Pfade, keine Kollisionen. Checkbox T5.3 tickt `3b`
+  nach Abschluss von `3a`.
+- **T5.4 als eine devops-Karte:** dieselben Dateien (`scripts/`, `docker-compose.yml`,
+  `OPERATIONS.md`); Split würde kollidieren.
+- **T5.5 nur Vorbereitung:** Durchführung/Checkbox erst nach Gate 3.
+- **Sandbox-Ersatznachweise:** WebKit → Konfig/CI + offener Lauf; k6 → Skript/Mock-Lauf;
+  RLS → statische Matrix + offener pgTAP-Lauf; Header/Limits → Node-Prüfung + offenes
+  `caddy validate`; Restore → Stub/Dry-Run + offener Docker-/PG-Lauf. Kein Produktivcode,
+  kein Release/Tagging.
+
+### Offene Punkte (nicht blockierend für Welle 5)
+
+- WebKit-Laufzeitnachweis (Systemlibs fehlen) auf CI/Docker-Host.
+- k6 50-VU-Lauf gegen echtes Supabase/PostgREST (D14).
+- pgTAP-/RLS-Lauf auf Docker-/PG-Host; in der Sandbox nur statisch belegt.
+- `caddy validate` + Header-/429-Verhalten auf Docker-Host.
+- Restore-Test gegen echtes PostgreSQL/Compose.
+- T1.3 (Compose/HTTPS-Laufzeitnachweis), D14 Real-Backend-E2E, D16 Zwei-Nutzer-E2E,
+  D19 axe-Abdeckung Dead-Letter-Dialog — unverändert offen, nicht Welle-5-blockierend.
+- T5.5-Durchführung und T5.6 Release/Tagging: erst nach Human Gate 3 durch den PO.
