@@ -478,3 +478,39 @@ projektweiter Umbau und nicht Teil von T4.3.
   **D24** in `docs/REVIEW.md`. Eine CI-Iteration kostet ~10 min; ein lokaler
   WebKit-Lauf ist in der Sandbox nicht möglich (fehlende Syslibs), weshalb die
   D24-Analyse an den CI-Läufer gebunden bleibt.
+
+## 2026-10-26 — D24: WebKit-Lane der E2E-Suite (Entscheidung: nicht release-blockierend für `v1.0.0`, Fix geschnitten)
+
+- **Entscheidung:** D24 ist **kein Release-Blocker für `v1.0.0`** (Tag `d912090`
+  bleibt unangetastet) und **kein Blocker der Welle-5-Abnahme**: AK D-1 nennt
+  ausdrücklich die **Chromium**-Suite „68/68 grün in CI“, und die ist nach dem
+  D23-Fix echt grün. D24 **ist** blockierend für „CI-Job `E2E` grün“ und damit
+  für ein `v1.0.1`. Deshalb wird ein Fix geschnitten (Karte **`t_6568b4f0`**,
+  `frontend`, Scope `apps/web/e2e/**` + ggf. `playwright.config.ts`), statt die
+  Lane stillzulegen.
+- **Begründung:** Der Job ist seit dem D23-Fix erstmals aussagekräftig. Ihn
+  jetzt „grün zu tricksen“ (`continue-on-error`, WebKit-Projekte entfernen,
+  `--grep-invert`) würde den T5.1-Auftrag (Suite über **alle vier** Projekte in
+  CI) und den Projektgrundsatz „Belege statt Behauptungen“ verletzen. Die 9
+  Fehlschläge sind ein Timing-/Navigationsproblem **in den Specs** (Navigation
+  zu `/lists` bzw. `/recipes` wird von einem noch laufenden Prefetch/RSC-Abruf
+  der `/household`-Seite unterbrochen), kein Anwendungsfehler — der Dev-Server
+  ist gesund (D23: `GET /` → 200).
+- **Alternative:** WebKit-Lane aus dem Pflicht-Gate nehmen und nur Chromium
+  blockieren. Als **Dauerlösung** verworfen: WebKit ist die Safari-/iOS-Engine
+  der Zielgruppe (iPhone im Supermarkt) — ein dauerhaft ungetesteter Safari-Pfad
+  wäre ein blindes Risiko. Als **Übergang** bleibt die Lane bis zum Fix bewusst
+  sichtbar rot (kein `continue-on-error`, keine stille Ausnahme).
+- **Risiko/Status:** **Offen.** Erwarteter Fix ist reine Testrobustheit (Warten
+  auf abgeschlossene Navigation nach `createHousehold()`/Login, z. B.
+  `waitForURL('**/household')`, `waitForLoadState('networkidle')`,
+  `expect(page).toHaveURL(...)`), **kein** Produktivcode. Nur falls der neue
+  CI-Lauf im `playwright-report`-Trace zeigt, dass die App unter WebKit
+  tatsächlich falsch navigiert/redirectet, ist `apps/web` dran — das ist vorher
+  zu belegen. Verifikation ausschließlich über einen **echten CI-Lauf auf
+  `master`** (lokal kein WebKit in der Sandbox); Chromium-Lane muss 68/68 grün
+  bleiben. Eine CI-Iteration kostet ~10 min.
+- **Vorbereitete PO-Entscheidung `v1.0.1`:** (A, empfohlen) Patch-Release erst
+  nach **grüner** WebKit-Lane; (B) Patch-Release sofort mit dokumentiertem D24
+  und Chromium-Gate. Ohne PO-Entscheid kein Tag. Begründung und Optionen in
+  `docs/REVIEW.md` §12.5 (D24) und im Handoff zu `t_6568b4f0`.

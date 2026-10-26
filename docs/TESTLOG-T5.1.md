@@ -182,3 +182,24 @@ der Launch scheitert aber an fehlenden Systembibliotheken (eigener Nachweis
 ```
 
 Damit ist auch die Reproduktion von D24 an den CI-Läufer gebunden.
+
+## Entscheidung D24 (Karte `t_b0f4b86a`, 2026-10-26)
+
+**D24 ist nicht release-blockierend für `v1.0.0`, aber blockierend für „CI grün“ und
+`v1.0.1`.** Begründung: Das T5.1-AK fordert ausdrücklich die **Chromium**-Suite 68/68
+grün in CI — das ist nach dem D23-Fix echt erfüllt. `v1.0.0` ist bereits auf `d912090`
+getaggt (vor dem D23-Fix); der Tag bleibt unangetastet. D24 ist ein echtes
+Testtiming-Problem (Navigations-Kollision nach `createHousehold()`), kein Anwendungs-
+oder Serverfehler.
+
+Der Job bleibt deshalb **bewusst sichtbar rot** — kein `continue-on-error`, keine
+entfernten/übersprungenen WebKit-Projekte. Fix-Karte **`t_6568b4f0`** (`frontend`,
+Scope `apps/web/e2e/**`): Navigation nach `createHousehold()`/Login abschließen lassen
+(`waitForURL('**/household')`, `waitForLoadState('networkidle')`,
+`expect(page).toHaveURL(...)`), dann echten CI-Lauf auf `master` als Nachweis
+(alle vier Projekte grün, Chromium-Lane weiter 68/68). Nur wenn der CI-Trace zeigt,
+dass die App unter WebKit falsch navigiert, ist Produktivcode dran — vorher belegen.
+Details: `docs/DECISIONS.md` (D24-Eintrag), `docs/REVIEW.md` §12.5.
+
+**Vorbereitete PO-Entscheidung `v1.0.1`:** (A, empfohlen) Patch-Release erst nach
+grüner WebKit-Lane; (B) Patch-Release sofort mit dokumentiertem D24 und Chromium-Gate.

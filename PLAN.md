@@ -363,6 +363,7 @@ _Ergänzung von architect (Datum: 2026-10-26). Additiv: §0–§7, Anhang A–C 
 ### D.5 Offene Punkte (nicht blockierend für Welle 5)
 
 - **WebKit-Laufzeitnachweis:** Systembibliotheken (`libsecret`, `libhyphen`, `libGLESv2`, `libx264`) fehlen in der Sandbox; echter WebKit-Lauf auf CI bzw. Docker-Host nachzuholen.
+- **D24 — WebKit-Lane der E2E-Suite ist in CI rot (9 Fehlschläge, Run `40393343034`):** Nach dem D23-Fix laufen die WebKit-Projekte echt, fallen aber an einer Navigations-Kollision nach `createHousehold()` um (`page.goto` zu `/lists`/`/recipes` wird von einer noch laufenden `/household`-Navigation unterbrochen) — Testtiming, kein App-Fehler. **Entscheidung (Karte `t_b0f4b86a`):** nicht release-blockierend für `v1.0.0` (bereits getaggt), aber blockierend für CI-Grün und `v1.0.1`; Fix-Karte **`t_6568b4f0`** (`frontend`) geschnitten. Kein `continue-on-error`, keine Projekt-Entfernung. Offen bis grüner CI-Lauf auf `master`; Chromium-Lane 68/68 muss grün bleiben.
 - **k6 50-VU-Lauf gegen echtes Supabase/PostgREST:** In der Sandbox nur Mock-Sync-Stack; echter Lauf bleibt Host-Nachweis (D14).
 - **pgTAP-/RLS-Lauf:** Kein Docker/`psql`/`pg-shim`; Abdeckung ist statisch belegt, der Lauf bleibt Docker-/PG-Host-Nachweis.
 - **`caddy validate` + Header-/Rate-Limit-Verhalten:** Kein Caddy-Binary; Konfig-Ebene belegt, Laufzeit-Verifikation (Header per `curl -I`, 429-Verhalten) bleibt Docker-Host-Nachweis.

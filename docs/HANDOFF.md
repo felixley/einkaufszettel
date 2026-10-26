@@ -702,3 +702,34 @@ geschnitten. Kein Produktivcode, kein Release/Tagging in dieser Welle.
 - T1.3 (Compose/HTTPS-Laufzeitnachweis), D14 Real-Backend-E2E, D16 Zwei-Nutzer-E2E,
   D19 axe-Abdeckung Dead-Letter-Dialog — unverändert offen, nicht Welle-5-blockierend.
 - T5.5-Durchführung und T5.6 Release/Tagging: erst nach Human Gate 3 durch den PO.
+
+### D24 — WebKit-Lane der E2E-Suite (`frontend` · Karte `t_6568b4f0`)
+
+- **Ziel:** Die beiden WebKit-Projekte (`webkit`, `mobile-webkit`) im CI-Job `E2E`
+  deterministisch grün bekommen — durch **Testrobustheit in den Specs**, nicht durch
+  CI-Tricks. Ausgangsbeleg: Run `40393343034` (`master` @ `4e26cd5`), 9 failed / 123
+  passed / 4 skipped, Chromium-Lane 68/68 grün.
+- **Ursache (Hypothese, am CI-Lauf zu prüfen):** Die Fehlschläge folgen dem Muster
+  `registerAndLogin()` → `createHousehold()` (endet auf `/household`) → sofortiges
+  `page.goto('/lists' | '/recipes')`. Unter WebKit ist die Navigation/der Prefetch zur
+  Haushalts-Seite noch „in flight“ und **unterbricht** das `page.goto`
+  (`Navigation to "…/lists" is interrupted by another navigation to "…/household"`);
+  `Failed to fetch RSC payload … TypeError: Load failed` ist der abgebrochene Prefetch
+  (kein Serverfehler — `GET /` liefert 200, D23).
+- **Akzeptanzkriterium:** Echter CI-Lauf auf `master` mit **allen vier Projekten grün**
+  (136 passed / 0 failed, Skips nur wie bisher begründet); Chromium-Lane weiterhin
+  68/68 grün; Ergebnis mit Run-ID in `docs/REVIEW.md` §12.2/§12.5 (D24 → behoben) und
+  `docs/TESTLOG-T5.1.md` nachgetragen.
+- **Betroffene Pfade:** `apps/web/e2e/*.spec.ts` (v. a. `recipes.spec.ts`,
+  `recipe-transfer.spec.ts`, `categorization.spec.ts`), ggf.
+  `apps/web/playwright.config.ts`.
+- **Constraints:** kein `continue-on-error`, keine entfernten/übersprungenen
+  WebKit-Projekte, kein `--grep-invert`, keine Retry-Erhöhung als Ersatz für den Fix;
+  kein Produktivcode ohne Trace-Beleg; `v1.0.0` bleibt auf `d912090`.
+- **Abhängigkeiten:** keine (Entscheidung/Scoping in `t_b0f4b86a` abgeschlossen).
+- **Sandbox-Grenze:** lokaler WebKit-Lauf unmöglich (fehlende Syslibs); Verifikation
+  nur über echten CI-Lauf — **Push nach `master` dafür autorisiert**; lokal höchstens
+  Chromium gegenprüfen. Eine CI-Iteration kostet ~10 min.
+- **Offene PO-Entscheidung `v1.0.1`:** (A, empfohlen) Patch-Release erst nach grüner
+  WebKit-Lane; (B) sofort mit dokumentiertem D24 und Chromium-Gate. Ohne PO-Entscheid
+  kein Tag (Details: `docs/DECISIONS.md`, D24-Eintrag).
