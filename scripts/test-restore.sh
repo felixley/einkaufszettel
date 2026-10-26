@@ -220,6 +220,27 @@ SQL
     ok "Ueberschreibschutz: nicht-leeres Ziel ohne RESTORE_DROP_EXISTING abgelehnt (Exit 5)"
   fi
 
+  # Regression: TARGET_DB == Maintenance-DB (Compose-Default "postgres").
+  # 1. Restore in die leere Default-DB "postgres" (ohne Drop).
+  # 2. Erneuter Restore mit RESTORE_DROP_EXISTING=yes -> erzwingt dropdb/createdb
+  #    gegen "postgres"; genau dieser Pfad scheiterte frueher, weil dropdb sich
+  #    implizit mit "postgres" verband. Jetzt laeuft er ueber template1.
+  if TARGET_DB=postgres RESTORE_CONFIRM=yes bash "$RESTORE_SH" "$bk" >/dev/null 2>&1; then
+    ok "Regression: Restore nach 'postgres' (leer, ohne Drop) erfolgreich"
+  else
+    ko "Regression: Restore nach 'postgres' (leer) fehlgeschlagen"
+  fi
+  if TARGET_DB=postgres RESTORE_CONFIRM=yes RESTORE_DROP_EXISTING=yes \
+       bash "$RESTORE_SH" "$bk" >/dev/null 2>&1; then
+    ok "Regression: TARGET_DB=postgres mit Drop/Create ueber Maintenance-DB erfolgreich"
+  else
+    ko "Regression: TARGET_DB=postgres mit Drop/Create fehlgeschlagen"
+  fi
+  local c_pg
+  c_pg="$(psql -d postgres -tAc "select count(*) from information_schema.tables where table_schema='public'" 2>/dev/null | tr -d '[:space:]')"
+  [ "${c_pg:-0}" != "0" ] && ok "Regression: 'postgres' enthaelt nach Restore ${c_pg} public-Tabellen" \
+                           || ko "Regression: 'postgres' enthaelt nach Restore keine public-Tabellen"
+
   # Negativ-Test: Retention loescht nur alte Archive
   touch -d '30 days ago' "$work/backups/einkaufszettel-old.sql.gz" "$work/backups/einkaufszettel-old.meta"
   BACKUP_DIR="$work/backups" POSTGRES_DB=ez_src RETENTION_DAYS=14 \

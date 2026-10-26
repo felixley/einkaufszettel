@@ -26,6 +26,10 @@
 #   RESTORE_DROP_EXISTING=yes  erlaubt das Verwerfen eines nicht-leeren Ziels
 #   RESTORE_DRY_RUN=1    nur Pruefungen, kein DB-Zugriff
 #   POSTGRES_USER        DB-User (Default: postgres)
+#   MAINT_DB             Maintenance-DB fuer dropdb/createdb (Default: template1).
+#                        Wird automatisch auf template1 bzw. postgres ausgewichen,
+#                        wenn sie mit TARGET_DB identisch waere. Dadurch funktioniert
+#                        auch TARGET_DB=postgres (Compose-Default).
 #   DATABASE_URL         vollstaendige libpq-URL (optional; Zieldb muss passen)
 #   PGHOST/PGPORT/PGPASSWORD  libpq-Einzelwerte (optional)
 #   COMPOSE_FILE         Pfad zur Compose-Datei (Default: <repo>/docker-compose.yml)
@@ -41,7 +45,14 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/docker-compose.yml}"
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
 TARGET_DB="${TARGET_DB:-}"
-MAINT_DB="${MAINT_DB:-postgres}"
+# Maintenance-DB fuer dropdb/createdb. Default template1, damit ein Restore in
+# die DB "postgres" (Compose-Default POSTGRES_DB) nicht gegen die eigene
+# Session laeuft. Ist die gewaehlte Maintenance-DB == TARGET_DB, wird auf die
+# jeweils andere sichere Maintenance-DB ausgewichen.
+MAINT_DB="${MAINT_DB:-template1}"
+if [ -n "$TARGET_DB" ] && [ "$MAINT_DB" = "$TARGET_DB" ]; then
+  if [ "$TARGET_DB" = "template1" ]; then MAINT_DB="postgres"; else MAINT_DB="template1"; fi
+fi
 
 log() { printf '%s [restore] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
@@ -65,7 +76,7 @@ if [ -z "$TARGET_DB" ]; then
   exit 2
 fi
 case "$TARGET_DB" in
-  postgres|template0|template1) log "FEHLER: '$TARGET_DB' ist keine zulaessige Zieldatenbank."; exit 2 ;;
+  template0|template1) log "FEHLER: '$TARGET_DB' ist keine zulaessige Zieldatenbank (Template-DB)."; exit 2 ;;
 esac
 
 # --- 1. Bestaetigung (Schutz vor versehentlichem Ueberschreiben) -------------
@@ -140,12 +151,12 @@ if [ "$exists" = "1" ]; then
       if [ -n "${DATABASE_URL:-}" ]; then
         psql "$(printf '%s' "$DATABASE_URL" | sed 's#/[^/]*$#/'"$MAINT_DB"'#')" -tAc "drop database if exists \"$TARGET_DB\"" >/dev/null
       else
-        dropdb --if-exists "$TARGET_DB"
+        dropdb --if-exists --maintenance-db "$MAINT_DB" "$TARGET_DB"
       fi
-      createdb "$TARGET_DB"
+      createdb --maintenance-db "$MAINT_DB" "$TARGET_DB"
     else
-      docker compose -f "$COMPOSE_FILE" exec -T db dropdb -U "$POSTGRES_USER" --if-exists "$TARGET_DB"
-      docker compose -f "$COMPOSE_FILE" exec -T db createdb -U "$POSTGRES_USER" "$TARGET_DB"
+      docker compose -f "$COMPOSE_FILE" exec -T db dropdb -U "$POSTGRES_USER" --if-exists --maintenance-db "$MAINT_DB" "$TARGET_DB"
+      docker compose -f "$COMPOSE_FILE" exec -T db createdb -U "$POSTGRES_USER" --maintenance-db "$MAINT_DB" "$TARGET_DB"
     fi
   else
     log "Ziel '$TARGET_DB' existiert und ist leer — Restore ohne Verwerfen."
@@ -156,10 +167,10 @@ else
     if [ -n "${DATABASE_URL:-}" ]; then
       psql "$(printf '%s' "$DATABASE_URL" | sed 's#/[^/]*$#/'"$MAINT_DB"'#')" -tAc "create database \"$TARGET_DB\"" >/dev/null
     else
-      createdb "$TARGET_DB"
+      createdb --maintenance-db "$MAINT_DB" "$TARGET_DB"
     fi
   else
-    docker compose -f "$COMPOSE_FILE" exec -T db createdb -U "$POSTGRES_USER" "$TARGET_DB"
+    docker compose -f "$COMPOSE_FILE" exec -T db createdb -U "$POSTGRES_USER" --maintenance-db "$MAINT_DB" "$TARGET_DB"
   fi
 fi
 

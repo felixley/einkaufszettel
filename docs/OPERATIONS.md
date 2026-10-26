@@ -43,7 +43,10 @@ bash scripts/backup.sh
 bash scripts/test-restore.sh --mode auto
 
 # 1) Neue Version bewusst setzen: in docker-compose.yml den Tag anpassen
-#    (z. B. supabase/gotrue:v2.197.0 -> v2.19x.y). Version committen.
+#    (z. B. supabase/gotrue:v2.197.0 -> v2.19x.y) und committen.
+git add docker-compose.yml
+git commit -m "chore(deploy): <dienst> auf <neuer Tag>"
+UPDATE_COMMIT="$(git rev-parse HEAD)"   # SHA fuer den Rollback notieren!
 
 # 2) Images ziehen und Stack neu starten.
 docker compose pull
@@ -74,13 +77,27 @@ Image-Update spielt **keine** neuen Migrationen automatisch ein.
 
 ### 1.4 Rollback
 
+Der `UPDATE_COMMIT` aus §1.2 Schritt 1 ist die Referenz. `git checkout --
+docker-compose.yml` wäre nach dem Commit ein **No-op** (HEAD zeigt bereits auf
+den neuen Tag) — deshalb wird der Commit zurückgenommen:
+
 ```bash
-# Schema unveraendert: nur Images zuruecknehmen.
-git checkout -- docker-compose.yml   # bzw. Tag manuell zuruecksetzen
+# Schema unveraendert: Images auf den Stand VOR dem Update zuruecknehmen.
+
+# Variante A (empfohlen, sauberer Verlauf): Update-Commit rueckgaengig machen.
+git revert --no-edit "${UPDATE_COMMIT:?SHA des Update-Commits aus 1.2}"
+docker compose pull && docker compose up -d
+
+# Variante B (falls kein Revert moeglich): Compose-File aus dem Vorgaenger-Commit.
+git checkout "${UPDATE_COMMIT}^" -- docker-compose.yml   # ^ = Parent (Stand davor)
 docker compose pull && docker compose up -d
 
 # Schema vorwaerts migriert: Backup zurueckspielen (siehe Abschnitt 5).
 ```
+
+Verifikation nach dem Rollback: `git show HEAD:docker-compose.yml | grep -n
+'image:'` zeigt wieder die alten Tags; `docker compose ps` alle Dienste
+`healthy`; `curl -fsS "https://${DOMAIN}/health"` liefert `{"status":"ok"}`.
 
 ---
 
@@ -184,6 +201,14 @@ demselben Datenträger schützt nicht gegen Hardware-Ausfall.
 - Vorprüfung: Datei vorhanden, `gzip -t`, PostgreSQL-Dump-Kopf.
 - `psql -v ON_ERROR_STOP=1` — bricht beim ersten SQL-Fehler ab.
 
+Für `dropdb`/`createdb` nutzt das Skript eine **separate Maintenance-DB**
+(`MAINT_DB`, Default `template1`; weicht automatisch auf `postgres` aus, falls
+die Wahl mit `TARGET_DB` kollidiert). Damit funktioniert auch ein Restore in die
+Compose-Default-DB **`postgres`** (`POSTGRES_DB`): `dropdb`/`createdb` verbinden
+sich nicht mehr mit der Zieldatenbank selbst, was sonst mit ``cannot drop the
+currently open database`` abbricht. Als Ziel sind nur `template0`/`template1`
+verboten.
+
 Exit-Codes: `0` Erfolg · `2` Argumente/Datei · `3` fehlende Bestätigung ·
 `4` beschädigtes Archiv · `5` Ziel nicht leer ohne Freigabe · `6`
 Verbindungsfehler · `7` Restore-Fehler.
@@ -248,18 +273,23 @@ bash scripts/test-restore.sh --mode dry-run   # nur Archiv-Vorpruefung
 5. **Abgleich** je public-Tabelle: Zeilenzahl **und** MD5-Checksumme
    (`md5(string_agg(x::text ...))`) müssen identisch sein — bit-genau.
 6. Negativ-Tests: Überschreibschutz (Exit 5), Retention löscht nur Alte.
+7. **Regression** (Fix Review-Runde 1): Restore in die Compose-Default-DB
+   `postgres` — erst leer (ohne Drop), dann mit `RESTORE_DROP_EXISTING=yes`
+   (erzwingt `dropdb`/`createdb` über die Maintenance-DB `template1`); prüft,
+   dass `postgres` danach die Fachtabellen enthält.
 
 PostgreSQL-Binaries werden gesucht in `$PG_BIN`, `$PATH`, `pg_config --bindir`
 und bekannten portablen Pfaden.
 
 **Lokaler Nachweis dieser Welle** (siehe
-[`docs/TESTLOG-T5.4.md`](./TESTLOG-T5.4.md)): 29/29 Checks grün, u. a.
+[`docs/TESTLOG-T5.4.md`](./TESTLOG-T5.4.md)): 32/32 Checks grün, u. a.
 
 ```
-categories         count=13 md5=509a1e36eedc
-category_rules     count=389 md5=ba3c3d084a7b
+categories         count=13 md5=7aade0b5cc2e
+category_rules     count=389 md5=bac52a87da11
 alle Tabellen: count UND md5 identisch (vollstaendig, bit-genau)
-==== ERGEBNIS: 29 bestanden, 0 fehlgeschlagen (Modus real) ====
+Regression: TARGET_DB=postgres mit Drop/Create ueber Maintenance-DB erfolgreich
+==== ERGEBNIS: 32 bestanden, 0 fehlgeschlagen (Modus real) ====
 ```
 
 Auf einem Host **ohne** PostgreSQL-Binaries läuft `--mode auto` auf `stub`
