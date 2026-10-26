@@ -203,3 +203,45 @@ Der MVP ist **Phase 2** aus §5: eine kollaborative Einkaufsliste, die bereits l
 | A-8 | Duplikat-Zusammenfassung (T2.8) | Gleicher `name_normalized` + gleiche Dimension → Mengen werden addiert und ein Hinweis angezeigt; unterschiedliche Dimension → eigene Zeile.                                                    | Unit-Tests (2 Fälle) + UI-Assertion im E2E                                               |
 
 **Querschnitt (gilt für alle A-1…A-8):** `pnpm lint && pnpm typecheck && pnpm test` grün; keine Secrets im Repo; Datenbankänderungen nur als Migration; RLS bleibt für jeden neuen Schreibpfad aktiv (pgTAP-Nachweis).
+
+## Anhang B — Welle 3: Phase 3 (Rezepte & Smart-Import) — Kartenschnitt und prüfbare AKs
+
+_Ergänzung von architect (Datum: 2026-10-26). Additiv: §0–§7 und Anhang A bleiben unverändert maßgeblich; die AKs in §5 bleiben die verbindliche Kurzform, dieser Anhang präzisiert sie auf Prüf-Ebene._
+
+### B.1 Ausgangslage
+
+- Phase 2 (T2.1–T2.8) ist fertig und von QA abgenommen (Gate 2, `docs/REVIEW.md`).
+- `recipes`/`recipe_ingredients` sind seit Migration 001 vorhanden (UUIDv7, `tags text[]`, `instructions`, `base_servings`, `sort_order`) und haben RLS-Policies in Migration 002; im MVP wurden sie bewusst nicht bebaut.
+- `packages/core/src/units.ts` kann bislang nur Dimension, Konvertierung und Rundung — **Parser, Formatter und Aggregator fehlen**.
+- `add_to_list` existiert nur als reiner TS-Vertrag (`packages/core/src/add-to-list.ts`); die in §4.2 geforderte **serverseitige RPC fehlt**. Diese Lücke schließt Welle 3.
+
+### B.2 Karten und Abhängigkeiten
+
+| Karte           | Profil   | Inhalt                                                                                                                 | Abhängig von                         |
+| --------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| T3.1/T3.3-Logik | core     | Einheiten-Parser/Formatter/Aggregator, `scaleRecipe`, `source_recipe_id` im `AddToListRequest`, Sync-Typen für Rezepte | —                                    |
+| T3.2-Persistenz | backend  | Migration 008: `add_to_list`-RPC + Idempotenz-Ledger; pgTAP inkl. Rezept-RLS                                           | —                                    |
+| T3.2-UI         | frontend | Rezept-CRUD offline (Dexie/Outbox), Suche, E2E                                                                         | T3.1-Logik                           |
+| T3.4-UI         | frontend | Vorschau-Dialog, Portionswahl, Übertragung über RPC, E2E Doppelübertragung                                             | T3.1-Logik, T3.2-Persistenz, T3.2-UI |
+
+Kein eigener devops-Auftrag: `ci.yml` (lint/typecheck/test/build) und `e2e.yml` (Playwright, `testDir ./e2e`) decken die neuen Karten automatisch ab; pgTAP bleibt bei der in `docs/DECISIONS.md` etablierten lokalen Verifikation (Vanilla PG 16.2 + Supabase-Shim).
+
+### B.3 Prüfbare Akzeptanzkriterien
+
+| #   | Feature (Plan-ID)                 | Testbares Akzeptanzkriterium                                                                                                                                                                                                                                                                                                          | Nachweis / Artefakt                                                   |
+| --- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| B-1 | Einheiten-Logik (T3.1)            | Parser versteht „250 g“, „1,5 EL“, „½ TL“, „¼ l“, „2 1/2 Stk“, „1 Prise“, „n. B.“, „2 Dosen“ (Komma/Punkt, Unicode-Brüche, gemischte Zahlen); Formatter: 1500 g → „1,5 kg“, 0.25 l → „250 ml“, Stück nie umgerechnet; Aggregator addiert gleichen normalisierten Namen + gleiche Dimension, inkompatible Einheit bleibt eigene Zeile. | Vitest ≥ 40 Tests im Units-/Recipe-Scope; Anzahl im Commit            |
+| B-2 | Portionsskalierung (T3.3, Logik)  | `scaleRecipe` skaliert 4 → 6 Portionen korrekt und rundet sinnvoll (Masse/Volumen 1 g/ml, Stück 0,5).                                                                                                                                                                                                                                 | Vitest-Fall 4→6; Ausgabe im Commit                                    |
+| B-3 | `add_to_list`-RPC (T3.4, Backend) | RPC existiert mit `SECURITY INVOKER`; Replay derselben `request_id` addiert nicht doppelt; gleicher Name+Dimension → atomare Summe; inkompatible Einheit → neue Zeile; `source_recipe_id` gesetzt; RLS: Nichtmitglied/Viewer schreiben nicht.                                                                                         | pgTAP-Suite `05_add_to_list.sql` + Gesamtlauf; `docs/TESTLOG-T3.2.md` |
+| B-4 | Rezept-CRUD offline (T3.2)        | Rezept anlegen/bearbeiten/löschen (Undo) und suchen funktioniert; offline angelegtes Rezept synchronisiert nach Reconnect; alle Schreibpfade laufen über Dexie/Outbox.                                                                                                                                                                | E2E `recipes.spec.ts` in chromium + mobile-chromium                   |
+| B-5 | „Auf die Einkaufsliste“ (T3.4)    | Rezept zweimal übertragen → Mengen addiert (nicht dupliziert); Hinweis „bereits auf Liste (+Menge)“ sichtbar; inkompatible Einheit → eigene Zeile; `source_recipe_id` in DB gesetzt.                                                                                                                                                  | E2E `recipe-transfer.spec.ts` in 2 Projekten                          |
+| B-6 | Querschnitt (alle Karten)         | `pnpm lint && pnpm typecheck && pnpm test && pnpm build` grün; keine Secrets; nur Migrationen; RLS für jeden neuen Schreibpfad aktiv.                                                                                                                                                                                                 | CI-Lauf + Commit-Nachweis                                             |
+
+### B.4 T3.5 „Zutaten, die ich schon habe“ — Entscheidung
+
+Aufwand deutlich **> 1 Tag** (eigene Tabelle, RLS-Policies, CRUD-UI, Abgleichlogik gegen Rezeptzutaten) → **nicht in Welle 3 umsetzen**; Eintrag in `docs/BACKLOG.md`. Die Planformulierung „nur wenn Aufwand <1 Tag“ erlaubt diese Zurückstellung.
+
+### B.5 Offene Punkte (nicht blockierend für Welle 3)
+
+- T1.3 (Compose/HTTPS-Laufzeitnachweis) bleibt auf einem Docker-Host nachzuholen; unabhängig von Phase 3.
+- Rate-Limiting für `add_to_list`: RLS + Auth decken Missbrauch im Haushaltskontext ab; ein Caddy-Limit bleibt Teil von T1.3/T5.3.

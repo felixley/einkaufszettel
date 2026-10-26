@@ -338,3 +338,45 @@ die Abnahme, entscheidet aber nicht.
 **Nächster Schritt:** Re-Scope-Kommentare an den Karten beachten (Body ignorieren),
 dann T1.1 starten. MVP-Feature-AKs für Phase 2: `PLAN.md` Anhang A (A-1…A-8).
 Rückmeldung an architect: Commit-Hash, erfüllte T1.x/AK, offene Punkte.
+
+---
+
+## Welle 3 — Phase 3 „Rezepte & Smart-Import“ (`architect`, Karte `t_7d11c1b7`)
+
+**Planungsstand 2026-10-26.** Maßgeblich bleiben `PLAN.md` §5 (T3.1–T3.5) und der neue
+**Anhang B** (Kartenschnitt + prüfbare AKs B-1…B-6). Phase 2 ist abgenommen; Welle 3
+baut Rezepte auf der bestehenden Dexie/Outbox-Schicht und ergänzt die fehlende
+serverseitige RPC `add_to_list`.
+
+### Karten (erstellt von architect, Kinder der Planungskarte)
+
+| Karte           | ID           | Assignee | Auftrag                                                                                                                                         | Abhängigkeiten                       |
+| --------------- | ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| T3.1/T3.3-Logik | `t_d6fc2927` | core     | Einheiten-Parser/-Formatter/-Aggregator, `scaleRecipe`, `source_recipe_id` im `AddToListRequest`, Sync-Typen für `recipes`/`recipe_ingredients` | keine (gated auf Planungskarte)      |
+| T3.2-Persistenz | `t_5fd3abeb` | backend  | Migration 008: `add_to_list`-RPC + Idempotenz-Ledger; pgTAP `05_add_to_list.sql` inkl. Rezept-RLS                                               | keine                                |
+| T3.2-UI         | `t_c10073d1` | frontend | Rezept-CRUD offline (Dexie/Outbox), Suche, E2E `recipes.spec.ts`                                                                                | T3.1-Logik                           |
+| T3.4-UI         | `t_e8d5e9fe` | frontend | Vorschau-Dialog, Portionswahl, Übertragung, E2E `recipe-transfer.spec.ts`                                                                       | T3.1-Logik, T3.2-Persistenz, T3.2-UI |
+
+**Hinweis zum Kartenschnitt:** Beim Anlegen ging der Karten-Body technisch verloren;
+die vollständigen Spezifikationen (Ziel, Scope, Anforderungen, AK/Nachweis, Constraints)
+liegen deshalb als **Kommentar** an jeder Karte und sind dort maßgeblich. Drei Karten
+wurden vom Dispatcher sofort gestartet, bevor Spezifikation und Verlinkung gesetzt waren;
+die Dependency-Kanten konnten nachträglich nicht mehr per `kanban_link` gesetzt werden
+(„child is already running“). Ein Retry/Review muss die Spezifikation aus dem Kommentar
+lesen; der nächste architect-Lauf soll die Kanten nachziehen, sobald die Läufe beendet sind.
+
+### Entscheidungen
+
+- **T3.5 „Zutaten, die ich schon habe“:** Aufwand deutlich >1 Tag (eigene Tabelle, RLS,
+  CRUD, Abgleichlogik) → **nicht in Welle 3**; Eintrag in `docs/BACKLOG.md`.
+- **Kein devops-Auftrag:** `ci.yml` und `e2e.yml` decken die neuen Karten automatisch ab
+  (Playwright `testDir ./e2e`); pgTAP bleibt bei der lokalen Verifikation per
+  Vanilla-PG-16.2-Shim (`docs/DECISIONS.md`).
+- **`add_to_list` serverseitig nachziehen:** Die RPC fehlte bisher in der DB; der reine
+  TS-Vertrag in `packages/core/src/add-to-list.ts` bleibt Referenz für Verhalten
+  (Idempotenz per `request_id`, Aggregation nach Name+Dimension).
+
+### Offene Punkte (nicht blockierend)
+
+- T1.3-Laufzeitnachweis (Compose/HTTPS) weiterhin nur auf einem Docker-Host möglich.
+- Dependency-Gating der drei bereits laufenden Karten nachziehen, sobald beendet.
