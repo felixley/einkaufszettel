@@ -19,16 +19,16 @@ Basisschema 001/002 einmalig, die funktionalen Migrationen 003/004 je zweimal
 
 ## Ergebnis
 
-| Schritt | Ergebnis |
-| --- | --- |
-| Migration `20261025_001_schema.sql` | exit=0 |
-| Migration `20261025_002_rls.sql` | exit=0 |
+| Schritt                                                         | Ergebnis                     |
+| --------------------------------------------------------------- | ---------------------------- |
+| Migration `20261025_001_schema.sql`                             | exit=0                       |
+| Migration `20261025_002_rls.sql`                                | exit=0                       |
 | Migration `20261025_003_rpc_household_lists.sql` (1. + 2. Lauf) | exit=0 / exit=0 (idempotent) |
-| Migration `20261025_004_fix_lists_rls.sql` (1. + 2. Lauf) | exit=0 / exit=0 (idempotent) |
-| Seed (1. + 2. Lauf) | exit=0 / exit=0 (idempotent) |
-| pgTAP `01_rls.sql` | **45/45 ok**, exit=0 |
-| pgTAP `02_rpc_household_lists.sql` | **62/62 ok**, exit=0 |
-| Gesamt | **107 ok, 0 not ok** |
+| Migration `20261025_004_fix_lists_rls.sql` (1. + 2. Lauf)       | exit=0 / exit=0 (idempotent) |
+| Seed (1. + 2. Lauf)                                             | exit=0 / exit=0 (idempotent) |
+| pgTAP `01_rls.sql`                                              | **45/45 ok**, exit=0         |
+| pgTAP `02_rpc_household_lists.sql`                              | **62/62 ok**, exit=0         |
+| Gesamt                                                          | **107 ok, 0 not ok**         |
 
 ## Echtes Output (Auszug)
 

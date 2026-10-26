@@ -400,3 +400,49 @@ projektweiter Umbau und nicht Teil von T4.3.
   `run_local_verify.sh` läuft damit vollständig durch. Der echte
   Supabase-/PostgREST-/GoTrue-Lauf auf einem Docker-Host bleibt offener
   Umgebungsnachweis (analog D14).
+
+## 2026-10-26 — Release v1.0.0: Version, Tag, Changelog, Deployment-Doku
+
+- **Entscheidung 1 — Version `1.0.0` statt `1.0.0-rc.x`/`0.x`:** Nach Human
+  Gate 3 (Go-Live-Freigabe) ist der Funktionsumfang der Phasen 1–4 von QA
+  abgenommen (`docs/REVIEW.md`, Wellen 1–5 „bestanden“). Die Version steht
+  **konsistent** in Root-`package.json`, `apps/web/package.json` und
+  `packages/core/package.json`; das Tag `v1.0.0` liegt auf dem Release-Commit.
+  Abweichende Versionen je Workspace wurden verworfen (Verwirrung ohne Nutzen
+  in einem privaten Monorepo, das nicht publiziert wird).
+- **Entscheidung 2 — Release-Notes = Changelog-Auszug:** `CHANGELOG.md` ist die
+  einzige Quelle für die Release-Notes (GitHub Release ohne eigene
+  Pflege-Datei, keine Build-Artefakte am Release). Aufbau angelehnt an Keep a
+  Changelog, Abschnitte je Phase plus „Bekannte offene Punkte“.
+- **Entscheidung 3 — Deployment-Doku geteilt:** `DEPLOY.md` beschreibt den
+  **Erststart** auf dem Homeserver (Env, `compose up`, Health/HTTPS,
+  Backup-Cron, Monitoring-Profil, Host-Nachweis-Checkliste);
+  `docs/OPERATIONS.md` bleibt das vollständige Runbook für den laufenden
+  Betrieb (Update/Rollback, Healthchecks, Logrotation, Restore/DR,
+  Cert-Expiry, Monitoring). Damit wiederholt die Startanleitung das Runbook
+  nicht, verweist aber an jeder Stelle darauf.
+- **D12 (Info, Welle 3) — Markdown-Formatierung:** Behoben. `prettier --write`
+  über die betroffenen Dateien `docs/TESTLOG-T2.2.md`, `docs/TESTLOG-T3.2.md`
+  und `docs/wireframes.md`; `prettier --check "**/*.md"` ist danach für den
+  gesamten Bestand grün. Die CI-Lint-Glob bleibt **bewusst ohne `md`**: die
+  Prüfung würde sonst an einer einzelnen unformatierten Doku-Datei die
+  Pipeline rot machen, obwohl der husky/lint-staged-Hook `*.md` beim Commit
+  ohnehin formatiert. Alternative (Glob erweitern) verworfen — kein
+  Abnahmekriterium und höheres Bruchrisiko für Doku-Commits.
+- **D20 (Info, Welle 4) — `apps/web/app/favicon.ico`:** Als **echtes Asset**
+  bewertet und **committet**. Belege: gültiger ICO-Container
+  (`00 00 01 00`, 1 Eintrag, 32×32, 32 bpp, Nutzdaten ab Offset 22) mit
+  eingebettetem 32×32-RGBA-PNG (`89 50 4E 47` + IHDR `32 32 08 06`, `IEND`),
+  Gesamtgröße 353 Byte. Next.js behandelt die Datei im App-Router per
+  Konvention als statische Route: der Build erzeugt
+  `.next/server/app/favicon.ico/route.js` (`force-static`,
+  `Content-Type: image/x-icon`) und der Standalone-Build liefert sie unter
+  `/favicon.ico` aus — sie ist damit die Browser-Tab-Icon-Quelle der App.
+  Alternative „löschen“ verworfen: das entfernt ein funktionierendes,
+  bereits ausgeliefertes Asset; ein Entwicklungsartefakt hätte keinen
+  Image-Header mit `image/x-icon`-Content-Type erzeugt.
+- **Risiko/Status:** Release reproduzierbar local-only gebaut und verifiziert
+  (`pnpm lint`, `typecheck`, `vitest` 280/280, `build`, Playwright
+  `chromium`+`mobile-chromium` 68/68). Alle Docker-/Host-Nachweise (T1.3,
+  D14, WebKit-Lauf, Restore gegen den Compose-Stack) bleiben offen und sind in
+  `DEPLOY.md` §7 als Erststart-Checkliste geführt.

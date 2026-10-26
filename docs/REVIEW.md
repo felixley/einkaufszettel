@@ -928,46 +928,46 @@ Dead-Letter-Dialogs als optionale Folge-Maßnahme.
   untracked `apps/web/app/favicon.ico` sauber). T5.5/T5.6 sind bewusst **nicht**
   Gegenstand dieser Abnahme (Human Gate 3 beim PO).
 - **Umgebung:** Sandbox ohne Docker-Daemon (`Cannot connect to the Docker daemon
-  at unix:///var/run/docker.sock`), ohne `caddy`-, `k6`- und `psql`-Binary im
+at unix:///var/run/docker.sock`), ohne `caddy`-, `k6`- und `psql`-Binary im
   `PATH`. Verfügbar gemacht: portable PostgreSQL 16.2 (Shim, Port 55432) und
   18.6.1, `k6 v2.3.0`, `docker compose v5.6.1` (Standalone-Plugin), `node
-  v26.7.0`, `pnpm 9.15.4` über `node …/pnpm.cjs`.
+v26.7.0`, `pnpm 9.15.4` über `node …/pnpm.cjs`.
 - **Rollen:** QA prüft gegen die AKs; kein Produktivcode geändert. Ergänzt wurde
   nur diese Datei sowie die Abnahme-Checkbox T5.3 in `PLAN.md` (analog D15/T4.3).
 
 ### 12.1 Prüfumfang
 
-| Aufgabe | Prüfgegenstand                                                        | Geprüft                                                      |
-| ------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
-| T5.1    | 4 Playwright-Projekte, `e2e.yml` mit Chromium+WebKit, Chromium-Suite   | ja (Chromium 68/68, `--list` 136 Tests, WebKit-Lauf offen)   |
-| T5.2    | `perf/k6-sync.js` (50 VUs), Thresholds, `docs/PERF.md`, Rohdaten       | ja (k6 v2.3.0, `inspect` + Rohdaten-JSON)                     |
-| T5.3a   | RLS-Abdeckungsmatrix, Suite 06, Runner, echter pgTAP-Lauf              | ja (echter Lauf gegen PG 16.2 ausgeführt)                     |
-| T5.3b   | Caddy-Header/Rate-Limits, `check-security-config.mjs`, Dependency-Audit| ja (26/26, `pnpm audit --prod` grün; `caddy validate` offen)  |
-| T5.4    | `restore.sh`/`test-restore.sh`, Retention, `OPERATIONS.md`, Logrotation| ja (real 37/37, stub 9/9, `compose config -q` grün)           |
-| T5.5    | `docs/DOGFOODING.md` + `docs/FEEDBACK.md`, Checkbox offen             | ja (Vorhanden-/Inhaltsprüfung)                                |
+| Aufgabe | Prüfgegenstand                                                          | Geprüft                                                      |
+| ------- | ----------------------------------------------------------------------- | ------------------------------------------------------------ |
+| T5.1    | 4 Playwright-Projekte, `e2e.yml` mit Chromium+WebKit, Chromium-Suite    | ja (Chromium 68/68, `--list` 136 Tests, WebKit-Lauf offen)   |
+| T5.2    | `perf/k6-sync.js` (50 VUs), Thresholds, `docs/PERF.md`, Rohdaten        | ja (k6 v2.3.0, `inspect` + Rohdaten-JSON)                    |
+| T5.3a   | RLS-Abdeckungsmatrix, Suite 06, Runner, echter pgTAP-Lauf               | ja (echter Lauf gegen PG 16.2 ausgeführt)                    |
+| T5.3b   | Caddy-Header/Rate-Limits, `check-security-config.mjs`, Dependency-Audit | ja (26/26, `pnpm audit --prod` grün; `caddy validate` offen) |
+| T5.4    | `restore.sh`/`test-restore.sh`, Retention, `OPERATIONS.md`, Logrotation | ja (real 37/37, stub 9/9, `compose config -q` grün)          |
+| T5.5    | `docs/DOGFOODING.md` + `docs/FEEDBACK.md`, Checkbox offen               | ja (Vorhanden-/Inhaltsprüfung)                               |
 
 ### 12.2 Durchgeführte Tests mit echtem Output
 
-| Prüfung                     | Kommando                                                     | Ergebnis                                                                                                    |
-| --------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Shell-Syntax                | `bash -n` über `scripts/*.sh` + `supabase/tests/*.sh`        | **5/5 OK** (backup, restore, test-restore, check-cert-expiry, run_local_verify)                             |
-| Security-Config             | `node scripts/check-security-config.mjs`                      | **26/26 passed**, exit 0 (Header, CSP, 3 Rate-Limit-Zonen, Pins)                                             |
-| RLS/pgTAP (echter Lauf)     | `PGROOT=… bash supabase/tests/run_local_verify.sh`            | **ALLE TESTS GRUEN**, exit 0; 6 Suiten = **45+62+77+17+58+91 = 350 Assertions**, 0 `not ok`; Migrationen+Seed idempotent |
-| Playwright Projektliste     | `playwright test --list`                                      | **136 tests in 13 files** (34 je Projekt × 4)                                                                |
-| E2E Chromium-Regression     | `playwright test --project=chromium --project=mobile-chromium`| **68 passed (5.6m)**, 0 failed                                                                              |
-| Restore-Test (real)         | `bash scripts/test-restore.sh --mode real`                    | **37 bestanden, 0 fehlgeschlagen**, exit 0 (temporäres Cluster Port 49293, PG 18.6.1)                        |
-| Restore-Test (stub)         | `bash scripts/test-restore.sh --mode stub`                    | **9 bestanden, 0 fehlgeschlagen**                                                                            |
-| Restore-Test (dry-run)      | `bash scripts/test-restore.sh --mode dry-run`                 | 10/10 **mit** `psql` im `PATH`; **1 FAIL ohne** (kein libpq/Docker) → D22                                     |
-| k6-Skript                   | `k6 inspect perf/k6-sync.js` (v2.3.0)                         | exit 0; 2 Szenarien, `sync_outbox` Peak 30 + `add_to_list` Peak 20 = 50 VUs                                  |
-| k6-Thresholds               | Rohdaten `perf/results/summary-20261026T130821.json`          | `vus_max=50`, `http_reqs.count=22023` (244,1/s), `http_req_duration p(95)=92,30 ms`, `http_req_failed value=0` |
-| Compose-Validierung         | `docker-compose config -q` (v5.6.1)                           | exit 0                                                                                                      |
-| Compose-Logrotation         | `docker-compose.yml`                                          | 6 × `logging: *default-logging` (json-file, 10m/3)                                                          |
-| Dependency-Audit            | `pnpm audit --prod`                                           | **No known vulnerabilities found**, exit 0                                                                  |
-| Lint / Typecheck            | `pnpm lint` / `pnpm typecheck`                                | exit 0 / exit 0 (packages/core + apps/web „Done“)                                                            |
-| Unit-Tests                  | `pnpm test`                                                   | **24 Dateien, 280/280 grün** (8,3 s)                                                                        |
-| Build                       | `pnpm build`                                                  | exit 0; 14/14 statische Seiten + `/health`, `/api/mock/*`                                                    |
-| T5.5-Dokumente              | Inhaltsprüfung                                                | `DOGFOODING.md` (8 Kap., Testfälle D1–D8, Known Issues), `FEEDBACK.md` (Vorlage, Schweregrade, fiktives Beispiel); PLAN-Checkbox T5.5 offen |
-| PLAN-Checkboxen             | `§5` Phase 5                                                  | T5.1/T5.2/T5.4 getickt; **T5.3 war trotz 3a+3b noch offen** → nachgezogen (D21); T5.5/T5.6 offen (korrekt)   |
+| Prüfung                 | Kommando                                                       | Ergebnis                                                                                                                                    |
+| ----------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shell-Syntax            | `bash -n` über `scripts/*.sh` + `supabase/tests/*.sh`          | **5/5 OK** (backup, restore, test-restore, check-cert-expiry, run_local_verify)                                                             |
+| Security-Config         | `node scripts/check-security-config.mjs`                       | **26/26 passed**, exit 0 (Header, CSP, 3 Rate-Limit-Zonen, Pins)                                                                            |
+| RLS/pgTAP (echter Lauf) | `PGROOT=… bash supabase/tests/run_local_verify.sh`             | **ALLE TESTS GRUEN**, exit 0; 6 Suiten = **45+62+77+17+58+91 = 350 Assertions**, 0 `not ok`; Migrationen+Seed idempotent                    |
+| Playwright Projektliste | `playwright test --list`                                       | **136 tests in 13 files** (34 je Projekt × 4)                                                                                               |
+| E2E Chromium-Regression | `playwright test --project=chromium --project=mobile-chromium` | **68 passed (5.6m)**, 0 failed                                                                                                              |
+| Restore-Test (real)     | `bash scripts/test-restore.sh --mode real`                     | **37 bestanden, 0 fehlgeschlagen**, exit 0 (temporäres Cluster Port 49293, PG 18.6.1)                                                       |
+| Restore-Test (stub)     | `bash scripts/test-restore.sh --mode stub`                     | **9 bestanden, 0 fehlgeschlagen**                                                                                                           |
+| Restore-Test (dry-run)  | `bash scripts/test-restore.sh --mode dry-run`                  | 10/10 **mit** `psql` im `PATH`; **1 FAIL ohne** (kein libpq/Docker) → D22                                                                   |
+| k6-Skript               | `k6 inspect perf/k6-sync.js` (v2.3.0)                          | exit 0; 2 Szenarien, `sync_outbox` Peak 30 + `add_to_list` Peak 20 = 50 VUs                                                                 |
+| k6-Thresholds           | Rohdaten `perf/results/summary-20261026T130821.json`           | `vus_max=50`, `http_reqs.count=22023` (244,1/s), `http_req_duration p(95)=92,30 ms`, `http_req_failed value=0`                              |
+| Compose-Validierung     | `docker-compose config -q` (v5.6.1)                            | exit 0                                                                                                                                      |
+| Compose-Logrotation     | `docker-compose.yml`                                           | 6 × `logging: *default-logging` (json-file, 10m/3)                                                                                          |
+| Dependency-Audit        | `pnpm audit --prod`                                            | **No known vulnerabilities found**, exit 0                                                                                                  |
+| Lint / Typecheck        | `pnpm lint` / `pnpm typecheck`                                 | exit 0 / exit 0 (packages/core + apps/web „Done“)                                                                                           |
+| Unit-Tests              | `pnpm test`                                                    | **24 Dateien, 280/280 grün** (8,3 s)                                                                                                        |
+| Build                   | `pnpm build`                                                   | exit 0; 14/14 statische Seiten + `/health`, `/api/mock/*`                                                                                   |
+| T5.5-Dokumente          | Inhaltsprüfung                                                 | `DOGFOODING.md` (8 Kap., Testfälle D1–D8, Known Issues), `FEEDBACK.md` (Vorlage, Schweregrade, fiktives Beispiel); PLAN-Checkbox T5.5 offen |
+| PLAN-Checkboxen         | `§5` Phase 5                                                   | T5.1/T5.2/T5.4 getickt; **T5.3 war trotz 3a+3b noch offen** → nachgezogen (D21); T5.5/T5.6 offen (korrekt)                                  |
 
 Auszüge der entscheidenden Läufe:
 
@@ -1007,25 +1007,25 @@ $ docker-compose config -q              # exit 0 (v5.6.1)
 
 ### 12.3 Urteil je Kriterium (Anhang D)
 
-| #   | Kriterium                              | Urteil        | Begründung / Nachweis                                                                                                                                                                                                                                                                                |
-| --- | -------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D-1 | E2E-Suite in CI (T5.1)                 | **bestanden** | `playwright.config.ts` definiert `chromium`, `mobile-chromium`, `webkit`, `mobile-webkit`; `e2e.yml` installiert `--with-deps chromium webkit` und läuft alle Projekte; `--list` = 136 Tests/13 Dateien; Chromium-Regression **68/68** ohne Flake in dieser Abnahme; WebKit per `--list` validiert, Laufzeit offen (D.5). |
-| D-2 | k6-Lasttest 10×5 (T5.2)                | **bestanden** | `perf/k6-sync.js` mit 10 Haushalten × 5 VUs, Ramp-up, Thresholds p95<1000 ms / Fehler <1 % (k6 `inspect` exit 0); Rohdaten belegen `vus_max=50`, p95 **92,30 ms**, `http_req_failed=0`; `docs/PERF.md` mit Messwerten + Reproduktion. Echter Supabase-/DB-Lauf offen (D14).                       |
-| D-3 | RLS-Abdeckung (T5.3a)                  | **bestanden** | `docs/SECURITY-RLS-COVERAGE.md` mit Matrix über 11 Tabellen (4.1–4.11) × SELECT/INSERT/UPDATE/DELETE + RPC-Matrix; Suite 06 (91 Assertions) im Runner registriert; **echter** pgTAP-Lauf nachgestellt: 350 Assertions grün, idempotente Migrationen. Restlücken R1–R5 mit Risiko dokumentiert.       |
-| D-4 | Security-Baseline (T5.3b)              | **bestanden** | `check-security-config.mjs` **26/26** (CSP/HSTS/XFO/nosniff/Referrer-/Permissions-Policy, Zonen `auth_ip` 20/1m, `add_to_list_ip` 60/1m, `invite_ip` 10/1m, Pins) und in `ci.yml`; `pnpm audit --prod` 0 Vulnerabilities; `docs/SECURITY.md` vorhanden. `caddy validate` bleibt Host-Nachweis.    |
-| D-5 | Betrieb (T5.4)                         | **bestanden** | `restore.sh`/`test-restore.sh` `bash -n` grün; Test **real 37/37** (count+MD5 bit-genau), stub 9/9, dry-run 10/10 (mit libpq); Retention + SHA-256-Metadaten + `gzip -t` implementiert; `OPERATIONS.md` deckt Update/Rollback, Healthchecks, Logrotation, Backup/Restore, Cert-Expiry, Monitoring ab; Compose-Logrotation (6 Dienste); `compose config -q` exit 0. |
-| D-6 | Dogfooding-Vorbereitung (T5.5)         | **bestanden** | `docs/DOGFOODING.md` (2-Wochen-Ablauf, Rollen, D1–D8, Known Issues K1–K8, Eskalation, Kickoff) und `docs/FEEDBACK.md` (Vorlage inkl. Schweregrad/Reproduktion, fiktives Beispiel) vorhanden und eigenständig nutzbar; PLAN-Checkbox T5.5 bleibt offen.                                                        |
+| #   | Kriterium                      | Urteil        | Begründung / Nachweis                                                                                                                                                                                                                                                                                                                                              |
+| --- | ------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D-1 | E2E-Suite in CI (T5.1)         | **bestanden** | `playwright.config.ts` definiert `chromium`, `mobile-chromium`, `webkit`, `mobile-webkit`; `e2e.yml` installiert `--with-deps chromium webkit` und läuft alle Projekte; `--list` = 136 Tests/13 Dateien; Chromium-Regression **68/68** ohne Flake in dieser Abnahme; WebKit per `--list` validiert, Laufzeit offen (D.5).                                          |
+| D-2 | k6-Lasttest 10×5 (T5.2)        | **bestanden** | `perf/k6-sync.js` mit 10 Haushalten × 5 VUs, Ramp-up, Thresholds p95<1000 ms / Fehler <1 % (k6 `inspect` exit 0); Rohdaten belegen `vus_max=50`, p95 **92,30 ms**, `http_req_failed=0`; `docs/PERF.md` mit Messwerten + Reproduktion. Echter Supabase-/DB-Lauf offen (D14).                                                                                        |
+| D-3 | RLS-Abdeckung (T5.3a)          | **bestanden** | `docs/SECURITY-RLS-COVERAGE.md` mit Matrix über 11 Tabellen (4.1–4.11) × SELECT/INSERT/UPDATE/DELETE + RPC-Matrix; Suite 06 (91 Assertions) im Runner registriert; **echter** pgTAP-Lauf nachgestellt: 350 Assertions grün, idempotente Migrationen. Restlücken R1–R5 mit Risiko dokumentiert.                                                                     |
+| D-4 | Security-Baseline (T5.3b)      | **bestanden** | `check-security-config.mjs` **26/26** (CSP/HSTS/XFO/nosniff/Referrer-/Permissions-Policy, Zonen `auth_ip` 20/1m, `add_to_list_ip` 60/1m, `invite_ip` 10/1m, Pins) und in `ci.yml`; `pnpm audit --prod` 0 Vulnerabilities; `docs/SECURITY.md` vorhanden. `caddy validate` bleibt Host-Nachweis.                                                                     |
+| D-5 | Betrieb (T5.4)                 | **bestanden** | `restore.sh`/`test-restore.sh` `bash -n` grün; Test **real 37/37** (count+MD5 bit-genau), stub 9/9, dry-run 10/10 (mit libpq); Retention + SHA-256-Metadaten + `gzip -t` implementiert; `OPERATIONS.md` deckt Update/Rollback, Healthchecks, Logrotation, Backup/Restore, Cert-Expiry, Monitoring ab; Compose-Logrotation (6 Dienste); `compose config -q` exit 0. |
+| D-6 | Dogfooding-Vorbereitung (T5.5) | **bestanden** | `docs/DOGFOODING.md` (2-Wochen-Ablauf, Rollen, D1–D8, Known Issues K1–K8, Eskalation, Kickoff) und `docs/FEEDBACK.md` (Vorlage inkl. Schweregrad/Reproduktion, fiktives Beispiel) vorhanden und eigenständig nutzbar; PLAN-Checkbox T5.5 bleibt offen.                                                                                                             |
 
 ### 12.4 Urteil je Karte
 
-| Karte        | Inhalt                        | Urteil        | Begründung                                                                                                             |
-| ------------ | ----------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `t_1fb12e66` | T5.1 E2E in CI                | **bestanden** | 4 Projekte definiert, e2e.yml installiert beide Engines, Chromium 68/68 (eigener Lauf); WebKit-Lauf dokumentiert offen. |
-| `t_d87fc882` | T5.2 k6-Lasttest              | **bestanden** | Skript `inspect`-grün, 50 VUs, p95 92,3 ms / 0 % Fehler aus Rohdaten bestätigt; `docs/PERF.md` vollständig.            |
-| `t_5fb3079e` | T5.3a RLS-Abdeckung           | **bestanden** | Matrix 11 Tabellen + RPCs; Suite 06; 350 Assertions im echten Lauf grün (eigene Stichprobe).                            |
-| `t_0094b32d` | T5.3b Security-Baseline       | **bestanden** | 26/26 Konfigcheck + CI-Einbindung; Audit 0 VULN; Doku vorhanden.                                                        |
-| `t_cc7a72cf` | T5.4 Betrieb/Restore          | **bestanden** | Restore real 37/37, stub 9/9, dry-run 10/10; Betriebsrunbook + Logrotation + compose config grün.                       |
-| `t_ade04faa` | T5.5-Vorbereitung Dogfooding  | **bestanden** | Beide Dokumente vorhanden und nutzbar; keine Durchführung, Checkbox bewusst offen.                                      |
+| Karte        | Inhalt                       | Urteil        | Begründung                                                                                                              |
+| ------------ | ---------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `t_1fb12e66` | T5.1 E2E in CI               | **bestanden** | 4 Projekte definiert, e2e.yml installiert beide Engines, Chromium 68/68 (eigener Lauf); WebKit-Lauf dokumentiert offen. |
+| `t_d87fc882` | T5.2 k6-Lasttest             | **bestanden** | Skript `inspect`-grün, 50 VUs, p95 92,3 ms / 0 % Fehler aus Rohdaten bestätigt; `docs/PERF.md` vollständig.             |
+| `t_5fb3079e` | T5.3a RLS-Abdeckung          | **bestanden** | Matrix 11 Tabellen + RPCs; Suite 06; 350 Assertions im echten Lauf grün (eigene Stichprobe).                            |
+| `t_0094b32d` | T5.3b Security-Baseline      | **bestanden** | 26/26 Konfigcheck + CI-Einbindung; Audit 0 VULN; Doku vorhanden.                                                        |
+| `t_cc7a72cf` | T5.4 Betrieb/Restore         | **bestanden** | Restore real 37/37, stub 9/9, dry-run 10/10; Betriebsrunbook + Logrotation + compose config grün.                       |
+| `t_ade04faa` | T5.5-Vorbereitung Dogfooding | **bestanden** | Beide Dokumente vorhanden und nutzbar; keine Durchführung, Checkbox bewusst offen.                                      |
 
 ### 12.5 Befunde / Defekte (D-Serie fortgesetzt)
 

@@ -12,16 +12,16 @@ fest, nicht Farben, Typografie oder exakte Abstände. Jede Skizze ist ein Handy-
 
 ## 0. Globale Layout-Regeln
 
-| Regel | Umsetzung | Grund |
-|---|---|---|
-| Add-Zeile unten fixiert | Eingabefeld + „+“-Button in einer Bottom-Bar über der Tab-Bar; bei Tastatur nach oben geschoben | Daumen erreicht unten, nicht oben |
-| Große Tap-Targets | Zeile ≥ 56 px, Checkbox-Trefferfläche ≥ 44 × 44 px (unsichtbar vergrößert) | Supermarkt, einhändig, evtl. Handschuhe |
-| Abhaken = 1 Tap | Ganze linke Checkbox-Fläche schaltet `checked` um; kein Kontextmenü | Schnellster Kernpfad |
-| Abgehakte Artikel unten | Eigene Sektion „Erledigt (n)“ unter den offenen, einklappbar | Offene Artikel bleiben sichtbar |
-| Sync-Status immer sichtbar | Chip in der Kopfzeile: `synchronisiert` / `ausstehend: n` / `offline` | Local-first (PLAN §4.2) |
-| Kategorien-Gruppierung | Offene Artikel nach Kategorie (§4.4), Überschriften sticky | Scanbarkeit im Laden |
-| Destruktives mit Undo | Löschen entfernt sofort, Toast „Gelöscht – Rückgängig“ (5 s) | Kein Bestätigungsdialog |
-| Kein Modal für Alltägliches | Hinzufügen und Abhaken ohne Dialog; nur Bearbeiten/Import als Sheet | Weniger Reibung |
+| Regel                       | Umsetzung                                                                                       | Grund                                   |
+| --------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Add-Zeile unten fixiert     | Eingabefeld + „+“-Button in einer Bottom-Bar über der Tab-Bar; bei Tastatur nach oben geschoben | Daumen erreicht unten, nicht oben       |
+| Große Tap-Targets           | Zeile ≥ 56 px, Checkbox-Trefferfläche ≥ 44 × 44 px (unsichtbar vergrößert)                      | Supermarkt, einhändig, evtl. Handschuhe |
+| Abhaken = 1 Tap             | Ganze linke Checkbox-Fläche schaltet `checked` um; kein Kontextmenü                             | Schnellster Kernpfad                    |
+| Abgehakte Artikel unten     | Eigene Sektion „Erledigt (n)“ unter den offenen, einklappbar                                    | Offene Artikel bleiben sichtbar         |
+| Sync-Status immer sichtbar  | Chip in der Kopfzeile: `synchronisiert` / `ausstehend: n` / `offline`                           | Local-first (PLAN §4.2)                 |
+| Kategorien-Gruppierung      | Offene Artikel nach Kategorie (§4.4), Überschriften sticky                                      | Scanbarkeit im Laden                    |
+| Destruktives mit Undo       | Löschen entfernt sofort, Toast „Gelöscht – Rückgängig“ (5 s)                                    | Kein Bestätigungsdialog                 |
+| Kein Modal für Alltägliches | Hinzufügen und Abhaken ohne Dialog; nur Bearbeiten/Import als Sheet                             | Weniger Reibung                         |
 
 ---
 
@@ -67,14 +67,14 @@ Zweck: offene Artikel schnell erfassen und im Laden abhaken. Kontext: Haushalt +
 
 ### Beschriftete Kerninteraktionen
 
-| # | Interaktion | Taps | Ablauf |
-|---|---|---|---|
-| **A1** | **Hinzufügen** (≤ 2 Taps) | **1–2** | Tap in die Add-Zeile (1) → tippen → Enter/„+“ (2). Feld bleibt fokussiert für die nächste Eingabe. Sonderfall: „+“ mit leerem Feld übernimmt einen Vorschlag aus der Historie (dann 1 Tap). |
-| **A2** | **Abhaken** | **1** | Tap auf die Checkbox-Fläche links in der Zeile → `checked = true`, Zeile wandert animiert nach „Erledigt“; Outbox-Eintrag wird sofort geschrieben. Erneuter Tap macht es rückgängig. |
-| **A3** | Bearbeiten (Menge/Einheit/Name) | 2 | Tap auf den Zeilentext → Bottom-Sheet mit Name, Menge, Einheit, Kategorie, Notiz → „Speichern“. |
-| **A4** | Löschen mit Undo | 2 | Swipe nach links (oder ⋮ → Löschen) → Soft-Delete + Toast „Gelöscht – Rückgängig“ (5 s). Kein Bestätigungsdialog. |
-| **A5** | Kategorie ändern (Lernregel) | 3 | Bearbeiten-Sheet → Kategorie wählen → Speichern. Schreibt eine Haushalts-`category_rule` (PLAN §4.4). |
-| **A6** | Sync-Status prüfen | 0–1 | Chip in der Kopfzeile; Tap öffnet Outbox-Details (ausstehende Einträge, Retry). |
+| #      | Interaktion                     | Taps    | Ablauf                                                                                                                                                                                      |
+| ------ | ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A1** | **Hinzufügen** (≤ 2 Taps)       | **1–2** | Tap in die Add-Zeile (1) → tippen → Enter/„+“ (2). Feld bleibt fokussiert für die nächste Eingabe. Sonderfall: „+“ mit leerem Feld übernimmt einen Vorschlag aus der Historie (dann 1 Tap). |
+| **A2** | **Abhaken**                     | **1**   | Tap auf die Checkbox-Fläche links in der Zeile → `checked = true`, Zeile wandert animiert nach „Erledigt“; Outbox-Eintrag wird sofort geschrieben. Erneuter Tap macht es rückgängig.        |
+| **A3** | Bearbeiten (Menge/Einheit/Name) | 2       | Tap auf den Zeilentext → Bottom-Sheet mit Name, Menge, Einheit, Kategorie, Notiz → „Speichern“.                                                                                             |
+| **A4** | Löschen mit Undo                | 2       | Swipe nach links (oder ⋮ → Löschen) → Soft-Delete + Toast „Gelöscht – Rückgängig“ (5 s). Kein Bestätigungsdialog.                                                                           |
+| **A5** | Kategorie ändern (Lernregel)    | 3       | Bearbeiten-Sheet → Kategorie wählen → Speichern. Schreibt eine Haushalts-`category_rule` (PLAN §4.4).                                                                                       |
+| **A6** | Sync-Status prüfen              | 0–1     | Chip in der Kopfzeile; Tap öffnet Outbox-Details (ausstehende Einträge, Retry).                                                                                                             |
 
 ### Zustände
 
@@ -129,13 +129,13 @@ Zweck: Zutaten lesen, Portionen anpassen, Zutaten auf die Liste übertragen. Ein
 
 ### Beschriftete Kerninteraktionen
 
-| # | Interaktion | Taps | Ablauf |
-|---|---|---|---|
-| **B1** | Portionen ändern | 1 | „+“/„−“ skaliert alle Zutaten live (sinnvolle Rundung, z. B. ½ TL). Kein Speichern nötig; das Rezept selbst bleibt unverändert. |
-| **B2** | Zutat „habe ich“ markieren | 1 | Tap auf die Checkbox → Zutat wird beim Übertragen standardmäßig **nicht** übernommen (optional; Vorratsliste T3.5). |
-| **B3** | **Auf die Liste** (Import-Vorschau) | **2** | Tap auf den CTA → Import-Vorschau (Skizze C) öffnet sich; Bestätigen dort = 2. Tap. |
-| **B4** | Rezept bearbeiten | 2 | „Bearbeiten“ → Formular (Titel, Portionen, Zutaten, Tags) → „Speichern“. Offline über Dexie/Outbox. |
-| **B5** | Zutat antippen | 2 | Zeile antippen → Sheet „Menge/Einheit ändern“ → „Speichern“ (nur für dieses Rezept). |
+| #      | Interaktion                         | Taps  | Ablauf                                                                                                                          |
+| ------ | ----------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **B1** | Portionen ändern                    | 1     | „+“/„−“ skaliert alle Zutaten live (sinnvolle Rundung, z. B. ½ TL). Kein Speichern nötig; das Rezept selbst bleibt unverändert. |
+| **B2** | Zutat „habe ich“ markieren          | 1     | Tap auf die Checkbox → Zutat wird beim Übertragen standardmäßig **nicht** übernommen (optional; Vorratsliste T3.5).             |
+| **B3** | **Auf die Liste** (Import-Vorschau) | **2** | Tap auf den CTA → Import-Vorschau (Skizze C) öffnet sich; Bestätigen dort = 2. Tap.                                             |
+| **B4** | Rezept bearbeiten                   | 2     | „Bearbeiten“ → Formular (Titel, Portionen, Zutaten, Tags) → „Speichern“. Offline über Dexie/Outbox.                             |
+| **B5** | Zutat antippen                      | 2     | Zeile antippen → Sheet „Menge/Einheit ändern“ → „Speichern“ (nur für dieses Rezept).                                            |
 
 ---
 
@@ -173,31 +173,31 @@ konvertierbarer Einheiten. Entspricht T3.4 / A-8.
 
 ### Beschriftete Kerninteraktionen
 
-| # | Interaktion | Taps | Ablauf |
-|---|---|---|---|
-| **C1** | **Import-Vorschau** öffnen | 1 | Aus Skizze B (B3) bzw. aus der Rezeptliste „Auf die Liste“ → Sheet erscheint mit allen Zutaten, Mengen und Hinweisen. |
-| **C2** | Zutat ab-/auswählen | 1 je Zutat | Checkbox in der Vorschau; „Alle“/„Keine“ als Sammelaktion. |
-| **C3** | Konflikt entscheiden | 1 | Bei gleichem Namen + gleicher Dimension: Default „Addieren“ (RPC `add_to_list`); „Eigene Zeile“ als Alternative. |
-| **C4** | Import bestätigen | 1 | Primär-CTA → RPC `add_to_list` je Zutat, `source_recipe_id` gesetzt; Sheet schließt, Liste zeigt Sync-Chip und Toast „4 Artikel hinzugefügt“. |
-| **C5** | Import abbrechen | 1 | „Abbrechen“ oder „×“ → keine Schreibaktion. |
+| #      | Interaktion                | Taps       | Ablauf                                                                                                                                        |
+| ------ | -------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **C1** | **Import-Vorschau** öffnen | 1          | Aus Skizze B (B3) bzw. aus der Rezeptliste „Auf die Liste“ → Sheet erscheint mit allen Zutaten, Mengen und Hinweisen.                         |
+| **C2** | Zutat ab-/auswählen        | 1 je Zutat | Checkbox in der Vorschau; „Alle“/„Keine“ als Sammelaktion.                                                                                    |
+| **C3** | Konflikt entscheiden       | 1          | Bei gleichem Namen + gleicher Dimension: Default „Addieren“ (RPC `add_to_list`); „Eigene Zeile“ als Alternative.                              |
+| **C4** | Import bestätigen          | 1          | Primär-CTA → RPC `add_to_list` je Zutat, `source_recipe_id` gesetzt; Sheet schließt, Liste zeigt Sync-Chip und Toast „4 Artikel hinzugefügt“. |
+| **C5** | Import abbrechen           | 1          | „Abbrechen“ oder „×“ → keine Schreibaktion.                                                                                                   |
 
 ---
 
 ## 4. Tap-Bilanz der Kernpfade (Prüf-Ebene für Human Gate 1)
 
-| Kernpfad | Start | Taps bis Ziel | Anmerkung |
-|---|---|---|---|
-| Artikel hinzufügen (manuell) | Listenansicht | **≤ 2** | Tap ins Feld → Eingabe → Enter/„+“; Feld bleibt offen |
-| Artikel abhaken | Listenansicht | **1** | Checkbox-Fläche in der Zeile |
-| Abhaken rückgängig | Listenansicht | **1** | erneuter Tap |
-| Rezept → Import-Vorschau | Rezeptdetail | **2** | CTA „Auf die Liste“ (1) + Vorschau ist der 2. Schritt |
-| Import bestätigen | Import-Vorschau | **1** | Primär-CTA |
-| Löschen (mit Undo) | Listenansicht | **2** | Swipe + „Rückgängig“ (optional) |
+| Kernpfad                     | Start           | Taps bis Ziel | Anmerkung                                             |
+| ---------------------------- | --------------- | ------------- | ----------------------------------------------------- |
+| Artikel hinzufügen (manuell) | Listenansicht   | **≤ 2**       | Tap ins Feld → Eingabe → Enter/„+“; Feld bleibt offen |
+| Artikel abhaken              | Listenansicht   | **1**         | Checkbox-Fläche in der Zeile                          |
+| Abhaken rückgängig           | Listenansicht   | **1**         | erneuter Tap                                          |
+| Rezept → Import-Vorschau     | Rezeptdetail    | **2**         | CTA „Auf die Liste“ (1) + Vorschau ist der 2. Schritt |
+| Import bestätigen            | Import-Vorschau | **1**         | Primär-CTA                                            |
+| Löschen (mit Undo)           | Listenansicht   | **2**         | Swipe + „Rückgängig“ (optional)                       |
 
 ## 5. Offene Punkte für Human Gate 1 (PO-Entscheid)
 
-1. **Add-Zeile:** Immer sichtbar (fixiert) vs. nur am Scroll-Ende? *Empfehlung:* immer sichtbar.
-2. **Abhaken-Geste:** Checkbox-Tap vs. Swipe rechts? *Empfehlung:* Checkbox als Primärgeste, Swipe optional zusätzlich.
-3. **Erledigt-Sektion:** standardmäßig ein- oder ausgeklappt? *Empfehlung:* eingeklappt, Zähler sichtbar.
-4. **Import-Default bei Duplikaten:** „Addieren“ vorausgewählt? *Empfehlung:* ja, mit sichtbarer Rechnung.
-5. **Rezept-Checkbox:** „habe ich“-Markierung schon in v1 sichtbar? *Empfehlung:* ja, aber ohne Vorratslisten-Verwaltung (T3.5 bleibt optional).
+1. **Add-Zeile:** Immer sichtbar (fixiert) vs. nur am Scroll-Ende? _Empfehlung:_ immer sichtbar.
+2. **Abhaken-Geste:** Checkbox-Tap vs. Swipe rechts? _Empfehlung:_ Checkbox als Primärgeste, Swipe optional zusätzlich.
+3. **Erledigt-Sektion:** standardmäßig ein- oder ausgeklappt? _Empfehlung:_ eingeklappt, Zähler sichtbar.
+4. **Import-Default bei Duplikaten:** „Addieren“ vorausgewählt? _Empfehlung:_ ja, mit sichtbarer Rechnung.
+5. **Rezept-Checkbox:** „habe ich“-Markierung schon in v1 sichtbar? _Empfehlung:_ ja, aber ohne Vorratslisten-Verwaltung (T3.5 bleibt optional).

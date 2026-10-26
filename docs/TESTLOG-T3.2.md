@@ -20,23 +20,23 @@ Basisschema 001/002 einmalig, die funktionalen Migrationen 003–008 je zweimal
 
 ## Ergebnis
 
-| Schritt | Ergebnis |
-| --- | --- |
-| Migration `20261025_001_schema.sql` | exit=0 |
-| Migration `20261025_002_rls.sql` | exit=0 |
-| Migration `20261025_003_rpc_household_lists.sql` (1. + 2. Lauf) | exit=0 / exit=0 (idempotent) |
-| Migration `20261025_004_fix_lists_rls.sql` (1. + 2. Lauf) | exit=0 / exit=0 (idempotent) |
-| Migration `20261025_005_invites_and_members.sql` (1. + 2. Lauf) | exit=0 / exit=0 (idempotent) |
-| Migration `20261025_006_fix_household_members_rls.sql` (1. + 2. Lauf) | exit=0 / exit=0 (idempotent) |
-| Migration `20261025_007_sync_auth_profiles.sql` (1. + 2. Lauf) | exit=0 / exit=0 (idempotent) |
-| Migration `20261025_008_add_to_list_rpc.sql` (1. + 2. Lauf) | exit=0 / exit=0 (idempotent) |
-| Seed (1. + 2. Lauf) | exit=0 / exit=0 (idempotent) |
-| pgTAP `01_rls.sql` | **45/45 ok**, exit=0 |
-| pgTAP `02_rpc_household_lists.sql` | **62/62 ok**, exit=0 |
-| pgTAP `03_invites_and_members.sql` | **77/77 ok**, exit=0 |
-| pgTAP `04_profiles_sync.sql` | **17/17 ok**, exit=0 |
-| pgTAP `05_add_to_list.sql` (neu) | **58/58 ok**, exit=0 |
-| Gesamt | **259 ok, 0 not ok** (201 bestehende + 58 neue) |
+| Schritt                                                               | Ergebnis                                        |
+| --------------------------------------------------------------------- | ----------------------------------------------- |
+| Migration `20261025_001_schema.sql`                                   | exit=0                                          |
+| Migration `20261025_002_rls.sql`                                      | exit=0                                          |
+| Migration `20261025_003_rpc_household_lists.sql` (1. + 2. Lauf)       | exit=0 / exit=0 (idempotent)                    |
+| Migration `20261025_004_fix_lists_rls.sql` (1. + 2. Lauf)             | exit=0 / exit=0 (idempotent)                    |
+| Migration `20261025_005_invites_and_members.sql` (1. + 2. Lauf)       | exit=0 / exit=0 (idempotent)                    |
+| Migration `20261025_006_fix_household_members_rls.sql` (1. + 2. Lauf) | exit=0 / exit=0 (idempotent)                    |
+| Migration `20261025_007_sync_auth_profiles.sql` (1. + 2. Lauf)        | exit=0 / exit=0 (idempotent)                    |
+| Migration `20261025_008_add_to_list_rpc.sql` (1. + 2. Lauf)           | exit=0 / exit=0 (idempotent)                    |
+| Seed (1. + 2. Lauf)                                                   | exit=0 / exit=0 (idempotent)                    |
+| pgTAP `01_rls.sql`                                                    | **45/45 ok**, exit=0                            |
+| pgTAP `02_rpc_household_lists.sql`                                    | **62/62 ok**, exit=0                            |
+| pgTAP `03_invites_and_members.sql`                                    | **77/77 ok**, exit=0                            |
+| pgTAP `04_profiles_sync.sql`                                          | **17/17 ok**, exit=0                            |
+| pgTAP `05_add_to_list.sql` (neu)                                      | **58/58 ok**, exit=0                            |
+| Gesamt                                                                | **259 ok, 0 not ok** (201 bestehende + 58 neue) |
 
 ## Echtes Output (Auszug)
 
@@ -105,7 +105,7 @@ ALLE TESTS GRUEN
 1. **Namenskollision im `ON CONFLICT`-Ziel.** Der RPC-Parameter heißt laut
    TS-Vertrag/PostgREST `request_id`; die Ledger-Spalte ebenfalls. PL/pgSQL
    lehnte `on conflict (request_id)` als mehrdeutig ab. Fix: `on conflict on
-   constraint add_to_list_requests_pkey do nothing` (Constraint-Name statt
+constraint add_to_list_requests_pkey do nothing` (Constraint-Name statt
    Spaltenreferenz).
 2. **Keine v7-UUID im Server-Kern.** PostgreSQL 16 hat kein `uuidv7()`.
    `internal.uuid_v7()` erzeugt serverseitig eine v7-förmige UUID (48 Bit

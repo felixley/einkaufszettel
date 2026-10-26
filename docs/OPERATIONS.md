@@ -6,6 +6,10 @@ Geltungsbereich: Compose-Stack `einkaufszettel` (self-hosted Supabase + Next.js
   Update-Prozedur, Healthchecks, Logrotation, Backup/Restore, Restore-Test,
   Monitoring und den Umgang mit dem Zertifikatsablauf.
 
+**Stand: Release `v1.0.0` (2026-10-26).** Die Erstinstallation des Stacks steht
+in [`DEPLOY.md`](../DEPLOY.md); für Entwicklung (lokal ohne Docker) siehe
+[`README.md`](../README.md).
+
 Maßgeblich bleibt [`PLAN.md`](../PLAN.md); Architektur in
 [`docs/ARCHITECTURE.md`](./ARCHITECTURE.md).
 

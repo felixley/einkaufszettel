@@ -155,9 +155,9 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
     nachdem T5.3a und T5.3b beide abgeschlossen waren.
 - [x] **T5.4** Betrieb: Backup + **getesteter Restore**, Update-Prozedur, Healthchecks, Logrotation, Monitoring (z. B. Uptime Kuma).
 - [ ] **T5.5** Dogfooding 2 Wochen im eigenen Haushalt; Feedback in `docs/FEEDBACK.md`; Bugfix-Runde.
-- [ ] **T5.6** Release `v1.0.0`, Changelog, Deployment-Doku.
+- [x] **T5.6** Release `v1.0.0`, Changelog, Deployment-Doku. _AK:_ Tag `v1.0.0` auf dem Release-Commit, `CHANGELOG.md` (Features Phasen 1–4, bekannte offene Punkte), Version `1.0.0` konsistent in Root-/Web-/Core-`package.json`, Deployment-Doku (`DEPLOY.md` + `docs/OPERATIONS.md`); Verifikation `pnpm lint`, `typecheck`, `vitest` 280/280, Playwright Chromium 68/68, `build` — alles grün. Erledigt 2026-10-26 (`docs/DECISIONS.md`, Abschnitt „Release v1.0.0“); Release-Notes = Changelog-Auszug.
 
-🛑 **Human Gate 3:** Go-Live-Freigabe.
+🛑 **Human Gate 3:** Go-Live-Freigabe. _(Erteilt am 2026-10-26 durch den PO; T5.6 freigegeben, T5.5 Dogfooding läuft nach dem Release im Echtbetrieb.)_
 
 ## 6. Risiken & Mitigation (überarbeitet)
 
