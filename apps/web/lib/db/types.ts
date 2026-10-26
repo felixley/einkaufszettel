@@ -1,4 +1,20 @@
-import type { CategoryKey, FieldTimestamps, ListItemFields, Unit } from '@einkaufszettel/core';
+import type {
+  CategoryKey,
+  FieldTimestamps,
+  ListItemFields,
+  RecipeFields,
+  RecipeIngredientFields,
+  Unit,
+} from '@einkaufszettel/core';
+
+// Re-Export der Core-Domänentypen: Die Web-Schicht arbeitet mit denselben
+// Formen wie die Sync-Schicht in packages/core (keine Duplikate).
+export type {
+  Recipe,
+  RecipeFields,
+  RecipeIngredient,
+  RecipeIngredientFields,
+} from '@einkaufszettel/core';
 
 /**
  * Zeilenform der Dexie-Tabelle `list_items`.
@@ -74,3 +90,53 @@ export interface NewListItemInput {
   source_recipe_id?: string | null;
   note?: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Rezepte (T3.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Dexie-Zeile für `recipes`. Zusätzlich zu den Fachfeldern wird
+ * `title_normalized` für die Offline-Suche indiziert (Server hat die Spalte
+ * nicht, der Outbox-Payload lässt sie deshalb weg).
+ */
+export type LocalRecipeRow = RecipeFields & {
+  id: string;
+  title_normalized: string;
+  updated_at: string;
+  deleted_at: string | null;
+  field_updated_at: FieldTimestamps<RecipeFields>;
+};
+
+export type LocalRecipeIngredientRow = RecipeIngredientFields & {
+  id: string;
+  updated_at: string;
+  deleted_at: string | null;
+  field_updated_at: FieldTimestamps<RecipeIngredientFields>;
+};
+
+/** Zutat, wie sie das Formular liefert (ohne Rezept-ID/Sortierung). */
+export interface RecipeIngredientDraft {
+  id?: string;
+  name: string;
+  quantity: number | null;
+  unit: Unit | null;
+}
+
+export interface NewRecipeInput {
+  id?: string;
+  household_id: string;
+  title: string;
+  base_servings?: number | null;
+  tags?: string[];
+  instructions?: string | null;
+  ingredients?: RecipeIngredientDraft[];
+}
+
+export type RecipePatch = Partial<
+  Pick<RecipeFields, 'title' | 'base_servings' | 'tags' | 'instructions'>
+>;
+
+export type RecipeIngredientPatch = Partial<
+  Pick<RecipeIngredientFields, 'name' | 'quantity' | 'unit' | 'sort_order'>
+>;

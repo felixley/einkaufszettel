@@ -190,6 +190,9 @@ export default function ListsPage() {
         <h1>Einkaufsliste</h1>
         <div className={styles.headerActions}>
           <SyncStatusBadge />
+          <Link href="/recipes" className={styles.headerLink}>
+            Rezepte
+          </Link>
           <Link href="/household" className={styles.headerLink}>
             Haushalt
           </Link>

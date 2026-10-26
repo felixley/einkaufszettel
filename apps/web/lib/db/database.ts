@@ -4,6 +4,8 @@ import type {
   LocalCategoryRuleRow,
   LocalListItemRow,
   LocalOutboxRow,
+  LocalRecipeIngredientRow,
+  LocalRecipeRow,
   MetaRow,
 } from './types';
 
@@ -18,6 +20,8 @@ import type {
 export class EinkaufszettelDB extends Dexie {
   list_items!: Table<LocalListItemRow, string>;
   category_rules!: Table<LocalCategoryRuleRow, string>;
+  recipes!: Table<LocalRecipeRow, string>;
+  recipe_ingredients!: Table<LocalRecipeIngredientRow, string>;
   outbox!: Table<LocalOutboxRow, string>;
   dead_letter!: Table<DeadLetterRow, string>;
   meta!: Table<MetaRow, string>;
@@ -35,6 +39,17 @@ export class EinkaufszettelDB extends Dexie {
     this.version(2).stores({
       list_items: 'id, list_id, name_normalized, deleted_at, updated_at',
       category_rules: 'id, household_id, keyword, category_key, updated_at',
+      outbox: 'id, client_ts, table, op',
+      dead_letter: 'id, failed_at',
+      meta: 'key',
+    });
+    // v3: Rezepte + Zutaten (T3.2). Beide laufen über dieselbe Outbox wie
+    // list_items; `title_normalized` ist eine reine Offline-Suchspalte.
+    this.version(3).stores({
+      list_items: 'id, list_id, name_normalized, deleted_at, updated_at',
+      category_rules: 'id, household_id, keyword, category_key, updated_at',
+      recipes: 'id, household_id, title_normalized, deleted_at, updated_at',
+      recipe_ingredients: 'id, recipe_id, sort_order, deleted_at, updated_at',
       outbox: 'id, client_ts, table, op',
       dead_letter: 'id, failed_at',
       meta: 'key',

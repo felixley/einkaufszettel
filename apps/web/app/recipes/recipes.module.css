@@ -1,0 +1,422 @@
+.container {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  padding-bottom: 88px; /* Platz für die sticky Aktionsleiste */
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header h1 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.headerLink {
+  color: var(--fg);
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 0.5rem 0.25rem;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.headerBtn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--fg);
+  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.backBtn {
+  background: none;
+  border: none;
+  color: var(--fg);
+  font-size: 1.35rem;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 0.5rem;
+}
+
+.searchWrap {
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 0.75rem 1rem 0;
+}
+
+.searchInput {
+  width: 100%;
+  font-size: 1rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  background: var(--card);
+  color: var(--fg);
+  min-height: 44px;
+}
+
+.list {
+  flex: 1;
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.card {
+  display: flex;
+  align-items: stretch;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.cardLink {
+  flex: 1;
+  display: block;
+  padding: 0.9rem 1rem;
+  text-decoration: none;
+  color: var(--fg);
+  min-height: 56px;
+}
+
+.cardTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.cardMeta {
+  margin-top: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+
+.tag {
+  font-size: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  color: var(--muted);
+  background: var(--bg);
+}
+
+.deleteBtn {
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: none;
+  color: var(--danger-fg);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deleteBtn:active {
+  background: var(--border);
+}
+
+.emptyState {
+  text-align: center;
+  color: var(--muted);
+  padding: 2.5rem 1rem;
+  font-size: 0.95rem;
+}
+
+.stickyBar {
+  position: sticky;
+  bottom: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  padding: 0.75rem 1rem;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 40rem;
+  min-height: 48px;
+  padding: 0.75rem 1rem;
+  border: none;
+  border-radius: 0.65rem;
+  background: var(--success-fg);
+  color: var(--card);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.dangerBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--danger-fg);
+  border-radius: 0.6rem;
+  background: none;
+  color: var(--danger-fg);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form {
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  font-size: 1rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 44px;
+}
+
+.textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.errorText {
+  color: var(--danger-fg);
+  font-size: 0.9rem;
+}
+
+.sectionTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.ingredientRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ingredientInput {
+  flex: 1;
+  font-size: 1rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 44px;
+}
+
+.removeBtn {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  background: none;
+  color: var(--danger-fg);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.addRowBtn {
+  align-self: flex-start;
+}
+
+.undoToast {
+  position: fixed;
+  left: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  max-width: 40rem;
+  margin: 0 auto;
+  background: var(--fg);
+  color: var(--bg);
+  padding: 0.75rem 1rem;
+  border-radius: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  z-index: 40;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+}
+
+.undoToast button {
+  background: none;
+  border: none;
+  color: var(--bg);
+  font-weight: 700;
+  min-height: 44px;
+  padding: 0 0.25rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.detailWrap {
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.detailTitle {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0.25rem 0 0.35rem;
+}
+
+.detailMeta {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.ingredientList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ingredientItem {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 1rem;
+}
+
+.ingredientQty {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.instructionsText {
+  white-space: pre-line;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.centered {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--muted);
+}
+
+.savedBox {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}

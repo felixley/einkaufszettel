@@ -21,6 +21,9 @@ export function SyncStatusBadge() {
       title={status.detail}
       aria-live="polite"
       aria-label={`Sync-Status: ${status.label}`}
+      data-testid="sync-status"
+      data-sync-state={status.state}
+      data-pending-count={status.pendingCount}
     >
       <span className="sync-dot" aria-hidden="true" />
       <span>{status.label}</span>
