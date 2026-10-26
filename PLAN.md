@@ -143,8 +143,12 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
 ### Phase 5 – Test, Betrieb & Go-Live
 
 - [ ] **T5.1** E2E-Suite vollständig in CI (Chromium + WebKit-Mobile-Emulation).
-- [ ] **T5.2** Lasttest k6: 10 Haushalte × 5 gleichzeitige Nutzer, p95 Sync-Latenz <1 s. Ergebnis in `docs/PERF.md`.
+- [x] **T5.2** Lasttest k6: 10 Haushalte × 5 gleichzeitige Nutzer, p95 Sync-Latenz <1 s. Ergebnis in `docs/PERF.md`. Nachweis: `perf/k6-sync.js` (50 VUs, `k6 inspect` grün), Lauf gegen Produktions-Build p95 = 92,3 ms / 0 % Fehler (`docs/PERF.md`); Dev-Server-Referenz 1 127 ms (Toolchain-Engpass). Echter Supabase/Docker-Lauf offen (D14).
 - [ ] **T5.3** Security-Check: RLS-Tests vollständig, Dependency-Audit, Header (CSP, HSTS), Rate-Limits.
+  - T5.3b (Security-Baseline) umgesetzt 2026-10-26: Caddy-Header + Rate-Limits,
+    `scripts/check-security-config.mjs`, `docs/SECURITY.md`, Dependency-Audit
+    (0 Vulnerabilities). Checkbox bleibt offen, bis T5.3a (RLS-Abdeckung)
+    abgeschlossen ist.
 - [x] **T5.4** Betrieb: Backup + **getesteter Restore**, Update-Prozedur, Healthchecks, Logrotation, Monitoring (z. B. Uptime Kuma).
 - [ ] **T5.5** Dogfooding 2 Wochen im eigenen Haushalt; Feedback in `docs/FEEDBACK.md`; Bugfix-Runde.
 - [ ] **T5.6** Release `v1.0.0`, Changelog, Deployment-Doku.

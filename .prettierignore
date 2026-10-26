@@ -6,3 +6,5 @@ backups
 pnpm-lock.yaml
 .husky/_
 apps/web/next-env.d.ts
+# k6-Messrohdaten nicht umformatieren (maschinengenerierte --summary-export-JSONs)
+perf/results

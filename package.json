@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "pnpm --filter @einkaufszettel/web test:e2e",
+    "perf:k6": "k6 run -e BASE_URL=${BASE_URL:-http://localhost:3000} perf/k6-sync.js",
     "build": "pnpm -r --if-present build",
     "prepare": "husky"
   },
