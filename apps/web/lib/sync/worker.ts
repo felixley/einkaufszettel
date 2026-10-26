@@ -81,8 +81,10 @@ export class SyncWorker {
       });
     }
 
+    // Automatischer Lauf respektiert den Backoff (`next_attempt_at`);
+    // manuelle Trigger/Reconnect/Fokus versuchen dagegen sofort.
     this.timer = setInterval(() => {
-      void this.syncNow();
+      void this.syncNow({ dueOnly: true });
     }, this.options.intervalMs ?? DEFAULT_INTERVAL_MS);
 
     void this.syncNow();
@@ -114,10 +116,16 @@ export class SyncWorker {
   }
 
   /**
-   * Ein Replay-Lauf. Rückgabe `null` bedeutet: bereits ein Lauf aktiv oder
-   * offline. Ein währenddessen angeforderter Lauf wird nachgeholt.
+   * Ein Replay-Lauf. Rückgabe `null` bedeutet: bereits ein Lauf aktiv, offline
+   * oder (bei `dueOnly`) kein Eintrag fällig. Ein währenddessen angeforderter
+   * Lauf wird nachgeholt.
+   *
+   * `dueOnly` nutzt der automatische 30-s-Timer: Einträge, deren
+   * `next_attempt_at` noch in der Zukunft liegt, werden übersprungen (Backoff
+   * aus T4.3a). Manueller Trigger, Reconnect und Fokus rufen bewusst ohne
+   * `dueOnly` auf und versuchen sofort (Nutzererwartung, siehe DECISIONS.md).
    */
-  async syncNow(): Promise<ReplayResult | null> {
+  async syncNow(options: { dueOnly?: boolean } = {}): Promise<ReplayResult | null> {
     if (this.running) {
       this.rerunRequested = true;
       return null;
@@ -133,18 +141,31 @@ export class SyncWorker {
     this.running = true;
     try {
       const outbox = await readOutbox(this.options.db);
-      if (outbox.entries.length === 0) {
+      const now = this.now();
+      const dueEntries =
+        options.dueOnly === true
+          ? outbox.entries.filter(
+              (entry) =>
+                entry.next_attempt_at === undefined ||
+                Date.parse(entry.next_attempt_at) <= Date.parse(now),
+            )
+          : outbox.entries;
+
+      if (dueEntries.length === 0) {
         this.lastError = null;
         await this.emitStatus();
         return null;
       }
 
-      const result = await replayOutbox(outbox, this.options.adapter, {
+      const result = await replayOutbox({ entries: dueEntries }, this.options.adapter, {
         ...(this.options.maxAttempts === undefined
           ? {}
           : { maxAttempts: this.options.maxAttempts }),
+        // Gleiche injizierbare Uhr wie `saveReplayResult`: sonst würden
+        // `next_attempt_at` und `failed_at` auseinanderlaufen (Tests, T4.3a).
+        now: () => now,
       });
-      await saveReplayResult(this.options.db, result, this.now());
+      await saveReplayResult(this.options.db, result, now);
       this.lastError =
         result.deadLettered.length > 0
           ? `${result.deadLettered.length} Eintrag/Einträge dauerhaft fehlgeschlagen`

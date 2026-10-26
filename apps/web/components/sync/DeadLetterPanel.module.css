@@ -1,0 +1,198 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(0 0 0 / 45%);
+}
+
+/* Bottom-Sheet: auf dem Handy mit dem Daumen erreichbar. */
+.sheet {
+  width: 100%;
+  max-width: 32rem;
+  max-height: 85dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem calc(1rem + env(safe-area-inset-bottom));
+  background: var(--card);
+  color: var(--fg);
+  border-radius: 1rem 1rem 0 0;
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 30px rgb(0 0 0 / 25%);
+  overflow: hidden;
+}
+
+@media (min-width: 40rem) {
+  .overlay {
+    align-items: center;
+  }
+
+  .sheet {
+    border-radius: 1rem;
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 60px rgb(0 0 0 / 35%);
+  }
+}
+
+.handle {
+  width: 2.5rem;
+  height: 0.3rem;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: var(--border);
+  flex: 0 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.closeButton {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.closeButton:active {
+  transform: translateY(1px);
+}
+
+.live {
+  margin: 0;
+  min-height: 1.1rem;
+  font-size: 0.8rem;
+  color: var(--primary);
+}
+
+.empty {
+  margin: 0;
+  padding: 1.25rem 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.item {
+  border: 1px solid var(--danger-fg);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.itemHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.itemTitle {
+  font-weight: 650;
+  font-size: 0.9rem;
+}
+
+.attempts {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.error {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--danger-fg);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.retryButton,
+.discardButton {
+  flex: 1 1 0;
+  min-height: 48px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.88rem;
+  font-weight: 650;
+  border-radius: 0.65rem;
+  cursor: pointer;
+}
+
+.retryButton {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.discardButton {
+  border: 1px solid var(--danger-fg);
+  background: transparent;
+  color: var(--danger-fg);
+}
+
+.retryButton:active,
+.discardButton:active {
+  transform: translateY(1px);
+}
+
+.retryButton:disabled,
+.discardButton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .closeButton:active,
+  .retryButton:active,
+  .discardButton:active {
+    transform: none;
+  }
+}

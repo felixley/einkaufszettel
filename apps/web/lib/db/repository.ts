@@ -31,6 +31,7 @@ import {
 } from '@einkaufszettel/core';
 import type { EinkaufszettelDB } from './database';
 import type {
+  DeadLetterRow,
   LocalCategoryRuleRow,
   LocalListItemRow,
   LocalOutboxRow,
@@ -95,6 +96,8 @@ export function rowToOutboxEntry(row: LocalOutboxRow): OutboxEntry {
     client_ts: row.client_ts,
     attempts: row.attempts,
     payload: row.payload,
+    ...(row.next_attempt_at === undefined ? {} : { next_attempt_at: row.next_attempt_at }),
+    ...(row.last_error === undefined ? {} : { last_error: row.last_error }),
   } as OutboxEntry;
 }
 
@@ -106,6 +109,8 @@ export function outboxEntryToRow(entry: OutboxEntry): LocalOutboxRow {
     client_ts: entry.client_ts,
     attempts: entry.attempts,
     payload: entry.payload,
+    ...(entry.next_attempt_at === undefined ? {} : { next_attempt_at: entry.next_attempt_at }),
+    ...(entry.last_error === undefined ? {} : { last_error: entry.last_error }),
   };
 }
 
@@ -163,9 +168,11 @@ export async function saveReplayResult(
   await db.transaction('rw', db.outbox, db.dead_letter, async () => {
     if (result.applied.length > 0) await db.outbox.bulkDelete([...result.applied]);
 
-    const failedIds = new Set(result.failed.map((failure) => failure.id));
-    for (const entry of result.outbox.entries) {
-      if (failedIds.has(entry.id)) await db.outbox.update(entry.id, { attempts: entry.attempts });
+    // Komplette Zeile schreiben, damit neben `attempts` auch der neue
+    // `next_attempt_at`-Termin (Backoff, T4.3a) persistiert wird. Einträge
+    // außerhalb des Replay-Subsets bleiben unangetastet.
+    if (result.outbox.entries.length > 0) {
+      await db.outbox.bulkPut(result.outbox.entries.map(outboxEntryToRow));
     }
 
     for (const id of result.deadLettered) {
@@ -541,8 +548,46 @@ export async function getActiveItems(db: EinkaufszettelDB, listId?: string): Pro
     .sort((a, b) => a.fields.name.localeCompare(b.fields.name, 'de'));
 }
 
-export async function getDeadLetters(db: EinkaufszettelDB) {
-  return db.dead_letter.toArray();
+/** Alle dauerhaft fehlgeschlagenen Einträge, neueste zuerst. */
+export async function readDeadLetters(db: EinkaufszettelDB): Promise<DeadLetterRow[]> {
+  const rows = await db.dead_letter.toArray();
+  return rows.sort((a, b) => b.failed_at.localeCompare(a.failed_at));
+}
+
+/** Abwärtskompatibler Alias; neu verwenden `readDeadLetters`. */
+export const getDeadLetters = readDeadLetters;
+
+/**
+ * Reiht einen Dead-Letter-Eintrag erneut ein (T4.3): `attempts` zurück auf 0,
+ * Retry-Termin und Fehlertext entfernt. Der nächste Lauf (manueller Trigger)
+ * versucht den Eintrag sofort. Gibt `false` zurück, wenn der Eintrag fehlt.
+ */
+export async function retryDeadLetter(db: EinkaufszettelDB, id: string): Promise<boolean> {
+  const dead = await db.dead_letter.get(id);
+  if (dead === undefined) return false;
+
+  const entry: OutboxEntry = {
+    ...rowToOutboxEntry(dead.entry),
+    attempts: 0,
+  };
+  delete (entry as { next_attempt_at?: string }).next_attempt_at;
+  delete (entry as { last_error?: string }).last_error;
+
+  await db.transaction('rw', db.outbox, db.dead_letter, async () => {
+    await db.outbox.put(outboxEntryToRow(entry));
+    await db.dead_letter.delete(id);
+  });
+  notifyOutboxChanged();
+  return true;
+}
+
+/** Entfernt einen Dead-Letter-Eintrag endgültig (Verwerfen). */
+export async function discardDeadLetter(db: EinkaufszettelDB, id: string): Promise<boolean> {
+  const existing = await db.dead_letter.get(id);
+  if (existing === undefined) return false;
+  await db.dead_letter.delete(id);
+  notifyOutboxChanged();
+  return true;
 }
 
 // ---------------------------------------------------------------------------

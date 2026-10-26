@@ -311,3 +311,30 @@ public.categories` → **13**, `category_rules` → **389**; zweiter
   `pnpm typecheck`, `pnpm test` grün (269 Tests, 23 Dateien). Nachweis:
   `docs/TESTLOG-T4.2a.md` (Konvergenz 24 ms, Idempotenz, Aggregation,
   Soft-Delete, Cursor). E2E-„zwei Geräte offline/online“ folgt in T4.2b.
+
+## T4.3 — Dead-Letter-Anzeige
+
+**Portal für den Dialog.** Der `DeadLetterPanel` wird via `createPortal` an
+`document.body` gerendert. Grund: Er hängt im Header, dessen
+`position: sticky; z-index: 10` einen Stacking-Context aufspannt. Die fixe
+Add-Leiste (`z-index: 20`) lag damit über dem Dialog und ihr „+“-Button fing
+Klicks auf „Verwerfen“/„Erneut versuchen“ ab (nur mobil reproduzierbar).
+Portal löst das ohne globale z-index-Erhöhung; `role="dialog"` +
+`aria-modal="true"` bleiben erhalten.
+
+**Backoff gehört in die Persistenz.** `next_attempt_at` und `last_error` werden
+in `LocalOutboxRow` gespeichert. Automatische Läufe (`syncNow({ dueOnly: true })`,
+30-s-Tick) respektieren den Termin; manuelle Trigger (Badge, Reconnect, Fokus)
+versuchen sofort — Nutzererwartung schlägt strikten Backoff. Ohne persistierten
+Termin hätte jeder Tick den Backoff ausgehebelt.
+
+**Retry setzt `attempts` auf 0.** „Erneut versuchen“ ist eine bewusste
+Nutzerentscheidung; der Eintrag bekommt wieder das volle Versuchsbudget und
+keinen Retry-Termin. „Verwerfen“ löscht den Dead-Letter endgültig (Datenverlust
+ist hier gewollt und wird im UI benannt).
+
+**Styling: CSS-Modul statt Tailwind.** Der Auftrag nennt Tailwind, im Repo ist
+Tailwind jedoch nicht installiert (kein `tailwind.config.*`, keine Dependency);
+alle sechs Komponenten nutzen CSS-Module. `DeadLetterPanel.module.css` folgt
+daher der Repo-Konvention. Ein Tailwind-Setup nachzurüsten wäre ein eigener,
+projektweiter Umbau und nicht Teil von T4.3.

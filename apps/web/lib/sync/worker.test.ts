@@ -4,7 +4,13 @@ import type { ListItem, SyncAdapter } from '@einkaufszettel/core';
 import { InMemorySyncAdapter } from '@einkaufszettel/core/testing/in-memory-adapter';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { EinkaufszettelDB } from '../db/database';
-import { countDeadLetters, countPending, createItemLocal, getItem } from '../db/repository';
+import {
+  countDeadLetters,
+  countPending,
+  createItemLocal,
+  getItem,
+  readOutbox,
+} from '../db/repository';
 import type { SyncStatus } from './status';
 import { SyncWorker } from './worker';
 
@@ -110,6 +116,45 @@ describe('SyncWorker', () => {
     expect(await countDeadLetters(db)).toBe(1);
     expect(statuses.at(-1)?.state).toBe('error');
     expect(statuses.at(-1)?.label).toBe('1 nicht synchronisiert');
+  });
+
+  it('überspringt beim automatischen Lauf Einträge mit laufendem Backoff', async () => {
+    const adapter = new FailingAdapter();
+    let now = T2;
+    const instance = worker(adapter, { online: () => true, maxAttempts: 5, now: () => now });
+
+    await createItemLocal(db, { list_id: 'liste-1', name: 'Mehl' }, T1);
+
+    const first = await instance.syncNow({ dueOnly: true });
+    expect(first?.failed).toHaveLength(1);
+    const waiting = (await readOutbox(db)).entries[0];
+    expect(waiting?.attempts).toBe(1);
+    expect(waiting?.next_attempt_at).toBe(T3);
+
+    // Automatischer Lauf vor Ablauf der Wartezeit: kein Netzversuch.
+    const skipped = await instance.syncNow({ dueOnly: true });
+    expect(skipped).toBeNull();
+    expect((await readOutbox(db)).entries[0]?.attempts).toBe(1);
+
+    // Nach Ablauf ist der Eintrag wieder fällig.
+    now = T3;
+    const due = await instance.syncNow({ dueOnly: true });
+    expect(due?.failed).toHaveLength(1);
+    expect((await readOutbox(db)).entries[0]?.attempts).toBe(2);
+  });
+
+  it('versucht bei manuellem Trigger sofort trotz laufendem Backoff', async () => {
+    const adapter = new FailingAdapter();
+    const instance = worker(adapter, { online: () => true, maxAttempts: 5, now: () => T2 });
+
+    await createItemLocal(db, { list_id: 'liste-1', name: 'Zucker' }, T1);
+    await instance.syncNow({ dueOnly: true });
+    expect((await readOutbox(db)).entries[0]?.attempts).toBe(1);
+
+    // Badge-Tap / Reconnect: Nutzer erwartet sofortigen Versuch.
+    const forced = await instance.syncNow();
+    expect(forced?.failed).toHaveLength(1);
+    expect((await readOutbox(db)).entries[0]?.attempts).toBe(2);
   });
 
   it('macht Realtime-Zeilen ohne neuen Outbox-Eintrag sichtbar', async () => {

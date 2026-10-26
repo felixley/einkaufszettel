@@ -30,6 +30,7 @@ const INITIAL_STATUS: SyncStatus = {
   detail: 'Die lokale Datenbank wird initialisiert.',
   tone: 'muted',
   pendingCount: 0,
+  deadLetterCount: 0,
 };
 
 const SyncContext = createContext<SyncContextValue>({

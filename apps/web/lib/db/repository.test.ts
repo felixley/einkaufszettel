@@ -4,6 +4,7 @@ import {
   replayOutbox,
   type ListItem,
   type ListItemRowData,
+  type SyncAdapter,
   type UpsertEntry,
 } from '@einkaufszettel/core';
 import { InMemorySyncAdapter } from '@einkaufszettel/core/testing/in-memory-adapter';
@@ -13,10 +14,13 @@ import {
   checkItemLocal,
   createItemLocal,
   deleteItemLocal,
+  discardDeadLetter,
   getActiveItems,
   getItem,
   mergeRemoteItem,
+  readDeadLetters,
   readOutbox,
+  retryDeadLetter,
   saveReplayResult,
   updateItemLocal,
 } from './repository';
@@ -215,5 +219,58 @@ describe('Repository: Konfliktfälle (AK)', () => {
 
     expect(merged.resolution).toBe('deleted');
     expect((await getItem(db, item.id))?.deleted_at).toBe(T2);
+  });
+});
+
+describe('Repository: Dead-Letter-Verwaltung (T4.3)', () => {
+  class AlwaysFailAdapter implements SyncAdapter {
+    upsert(): void {
+      throw new Error('Server nicht erreichbar');
+    }
+    softDelete(): void {
+      throw new Error('Server nicht erreichbar');
+    }
+    addToList(): void {
+      throw new Error('Server nicht erreichbar');
+    }
+  }
+
+  async function createDeadLetter(): Promise<string> {
+    const failing = new AlwaysFailAdapter();
+    await createItemLocal(db, { list_id: 'liste-1', name: 'Kakao' }, T1);
+    const result = await replayOutbox(await readOutbox(db), failing, { maxAttempts: 1 });
+    await saveReplayResult(db, result, T2);
+    const dead = await readDeadLetters(db);
+    expect(dead).toHaveLength(1);
+    return dead[0]!.id;
+  }
+
+  it('retryDeadLetter reiht den Eintrag mit attempts=0 und ohne Backoff wieder ein', async () => {
+    const deadId = await createDeadLetter();
+
+    const retried = await retryDeadLetter(db, deadId);
+    expect(retried).toBe(true);
+    expect(await readDeadLetters(db)).toHaveLength(0);
+
+    const outbox = await readOutbox(db);
+    expect(outbox.entries).toHaveLength(1);
+    expect(outbox.entries[0]?.id).toBe(deadId);
+    expect(outbox.entries[0]?.attempts).toBe(0);
+    expect(outbox.entries[0]?.next_attempt_at).toBeUndefined();
+    expect(outbox.entries[0]?.last_error).toBeUndefined();
+  });
+
+  it('discardDeadLetter entfernt den Eintrag dauerhaft', async () => {
+    const deadId = await createDeadLetter();
+
+    const discarded = await discardDeadLetter(db, deadId);
+    expect(discarded).toBe(true);
+    expect(await readDeadLetters(db)).toHaveLength(0);
+    expect((await readOutbox(db)).entries).toHaveLength(0);
+  });
+
+  it('meldet false fuer unbekannte Dead-Letter-IDs', async () => {
+    expect(await retryDeadLetter(db, 'unbekannt')).toBe(false);
+    expect(await discardDeadLetter(db, 'unbekannt')).toBe(false);
   });
 });

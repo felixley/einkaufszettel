@@ -40,6 +40,14 @@ export interface LocalOutboxRow {
   client_ts: string;
   attempts: number;
   payload: unknown;
+  /**
+   * Frühester erneuter Replay-Zeitpunkt (ISO, T4.3a). Nur bei wartenden
+   * Einträgen gesetzt; der automatische Timer überspringt Einträge, deren
+   * Wartezeit noch läuft. Optional, damit bestehende Zeilen typechecken.
+   */
+  next_attempt_at?: string;
+  /** Letzter Fehlertext; nur bei Dead-Letter-Einträgen gesetzt. */
+  last_error?: string;
 }
 
 /** Dauerhaft fehlgeschlagene Outbox-Einträge (T4.3-Vorbereitung). */

@@ -24,6 +24,8 @@ export interface SyncStatus {
   detail: string;
   tone: SyncTone;
   pendingCount: number;
+  /** Anzahl dauerhaft fehlgeschlagener Einträge (Dead-Letter), T4.3. */
+  deadLetterCount: number;
 }
 
 export interface SyncStatusInput {
@@ -37,7 +39,10 @@ export interface SyncStatusInput {
 }
 
 export function computeSyncStatus(input: SyncStatusInput): SyncStatus {
-  const base = { pendingCount: input.pendingCount };
+  const base = {
+    pendingCount: input.pendingCount,
+    deadLetterCount: input.deadLetterCount,
+  };
 
   if (input.mode === 'mock') {
     return {
