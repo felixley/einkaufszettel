@@ -203,16 +203,35 @@ export async function getRecipe(db: EinkaufszettelDB, id: string): Promise<Recip
   return rowToRecipe(row);
 }
 
+/** Normalisiert eine Suchanfrage (trimmen, Kleinschreibung, de-DE). */
+export function normalizeSearchQuery(query: string): string {
+  return query.trim().toLocaleLowerCase('de-DE');
+}
+
+/**
+ * Prüft ein Rezept gegen eine bereits normalisierte Suchanfrage.
+ * Teiltreffer in Titel ODER Tags, case-insensitiv. Leere Anfrage passt immer.
+ * Wird von der DB-Suche und der Rezeptseite gemeinsam genutzt, damit beide
+ * dieselbe Semantik haben.
+ */
+export function recipeMatchesNeedle(recipe: Recipe, needle: string): boolean {
+  if (needle === '') return true;
+  const title = recipe.fields.title.toLocaleLowerCase('de-DE');
+  if (title.includes(needle)) return true;
+  return recipe.fields.tags.some((tag) => tag.toLocaleLowerCase('de-DE').includes(needle));
+}
+
+/** Filtert eine Rezeptliste nach Titel und Tags (case-insensitiv, Teiltreffer). */
+export function filterRecipesByQuery(recipes: readonly Recipe[], query: string): Recipe[] {
+  const needle = normalizeSearchQuery(query);
+  if (needle === '') return [...recipes];
+  return recipes.filter((recipe) => recipeMatchesNeedle(recipe, needle));
+}
+
 /** Offline-Suche über Titel und Tags (case-insensitiv, Teiltreffer). */
 export async function searchRecipes(db: EinkaufszettelDB, query: string): Promise<Recipe[]> {
   const all = await listActiveRecipes(db);
-  const needle = query.trim().toLocaleLowerCase('de-DE');
-  if (needle === '') return all;
-  return all.filter((recipe) => {
-    const title = recipe.fields.title.toLocaleLowerCase('de-DE');
-    if (title.includes(needle)) return true;
-    return recipe.fields.tags.some((tag) => tag.toLocaleLowerCase('de-DE').includes(needle));
-  });
+  return filterRecipesByQuery(all, query);
 }
 
 export async function listRecipeIngredients(

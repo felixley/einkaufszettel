@@ -7,9 +7,12 @@ import { readOutbox } from './repository';
 import {
   createRecipeLocal,
   deleteRecipeLocal,
+  filterRecipesByQuery,
   getRecipe,
   listActiveRecipes,
   listRecipeIngredients,
+  normalizeSearchQuery,
+  recipeMatchesNeedle,
   restoreRecipeLocal,
   saveRecipeWithIngredientsLocal,
   searchRecipes,
@@ -101,6 +104,45 @@ describe('Rezept-Repository (T3.2)', () => {
     expect(await searchRecipes(db, 'italien')).toHaveLength(1);
     expect(await searchRecipes(db, 'suppe')).toHaveLength(0);
     expect(await searchRecipes(db, '')).toHaveLength(2);
+  });
+
+  it('Suchhelfer und DB-Suche haben identische Semantik (Titel ODER Tags)', async () => {
+    const pasta = await createSampleRecipe('Pasta Pomodoro');
+    const curry = await createRecipeLocal(
+      db,
+      {
+        household_id: 'haushalt-1',
+        title: 'Gemüsecurry',
+        tags: ['vegan'],
+        ingredients: [{ name: 'Kokosmilch', quantity: 400, unit: 'ml' }],
+      },
+      T1,
+    );
+
+    expect(normalizeSearchQuery('  VEGAN  ')).toBe('vegan');
+
+    const active = await listActiveRecipes(db);
+    expect(filterRecipesByQuery(active, '')).toHaveLength(2);
+    expect(filterRecipesByQuery(active, '   ')).toHaveLength(2);
+
+    // Titel-Teiltreffer auch mitten im Wort, nicht nur als Präfix.
+    const byTitle = await searchRecipes(db, '  MODORO ');
+    expect(byTitle.map((recipe) => recipe.id)).toEqual([pasta.id]);
+
+    // Tag-Teiltreffer case-insensitiv – 'VEGAN' trifft nur das Curry
+    // ('vegetarisch' beim Pasta-Rezept enthält kein 'vegan').
+    const byTag = await searchRecipes(db, '  vegan  ');
+    expect(byTag.map((recipe) => recipe.id)).toEqual([curry.id]);
+
+    // Zutatennamen sind (bewusst) keine Suchfelder.
+    expect(await searchRecipes(db, 'Kokosmilch')).toHaveLength(0);
+
+    // Helfer und DB-Suche liefern dasselbe Ergebnis – keine Doppellogik.
+    expect(filterRecipesByQuery(active, ' vegan ').map((recipe) => recipe.id)).toEqual(
+      byTag.map((recipe) => recipe.id),
+    );
+    expect(recipeMatchesNeedle(pasta, 'italien')).toBe(true);
+    expect(recipeMatchesNeedle(pasta, 'suppe')).toBe(false);
   });
 
   it('getRecipe liefert null für unbekannte und soft-gelöschte Rezepte', async () => {

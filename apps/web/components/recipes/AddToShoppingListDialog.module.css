@@ -108,7 +108,7 @@
 
 .bulkBtn {
   flex: 1;
-  min-height: 2.9rem;
+  min-height: 3rem;
   padding: 0.4rem 0.6rem;
   background: var(--card);
   color: var(--fg);

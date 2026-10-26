@@ -8,7 +8,12 @@ import { RecipeCard } from '@/components/recipes/RecipeCard';
 import { useAuth } from '@/context/AuthContext';
 import { getDb } from '@/lib/db/database';
 import { useRecipeListData } from '@/lib/db/hooks';
-import { deleteRecipeLocal, restoreRecipeLocal } from '@/lib/db/recipes';
+import {
+  deleteRecipeLocal,
+  normalizeSearchQuery,
+  recipeMatchesNeedle,
+  restoreRecipeLocal,
+} from '@/lib/db/recipes';
 import type { Recipe } from '@/lib/db/types';
 import { getHouseholdAdapter, type HouseholdRole } from '@/lib/household';
 import { cacheHouseholdId, readCachedHouseholdId } from '@/lib/recipes/household-cache';
@@ -60,14 +65,12 @@ export default function RecipesPage() {
     return () => clearTimeout(timer);
   }, [undoRecipe]);
 
+  // Gleiche Suchsemantik wie `searchRecipes` (Titel ODER Tags), damit UI und
+  // DB-Funktion nicht auseinanderlaufen.
   const filtered = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase('de-DE');
+    const needle = normalizeSearchQuery(query);
     if (needle === '') return entries;
-    return entries.filter(({ recipe }) => {
-      const title = recipe.fields.title.toLocaleLowerCase('de-DE');
-      if (title.includes(needle)) return true;
-      return recipe.fields.tags.some((tag) => tag.toLocaleLowerCase('de-DE').includes(needle));
-    });
+    return entries.filter(({ recipe }) => recipeMatchesNeedle(recipe, needle));
   }, [entries, query]);
 
   const canWrite = role !== 'viewer';
