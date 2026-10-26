@@ -468,8 +468,13 @@ projektweiter Umbau und nicht Teil von T4.3.
   ein Produktions-Build würde die Suite also mit anderen Flags fahren und die
   gesamte T5.1-Abnahme (68/68 gegen den Dev-Server) entwertet. Zusätzlich wäre
   `output: 'standalone'` + `pnpm start` ein zweiter, ungeprüfter Startpfad.
-- **Risiko/Status:** Lokal reproduziert und behoben (Port 3313, identische
-  `webServer`-Kette: ohne `dist/` → `GET /` 500 und Serverlog
-  `Module not found`, mit `dist/` → `GET /` 200). Der belastbare Nachweis ist
-  der grüne CI-Lauf auf `master` (`docs/REVIEW.md` D23); WebKit-Syslibs auf dem
-  Runner sind ein separater, im Lauf beobachteter Punkt.
+- **Risiko/Status:** Behoben und im echten CI-Lauf belegt. Lokal reproduziert
+  (Port 3313, identische `webServer`-Kette: ohne `dist/` → `GET /` 500 und
+  Serverlog `Module not found`, mit `dist/` → `GET /` 200), danach CI-Run
+  `40393343034` auf `master` (`4e26cd5`): die Suite läuft erstmals wirklich —
+  **123 passed / 9 failed / 4 skipped**, Chromium-Lane **68/68 grün** (T5.1-AK
+  damit echt erfüllt). Der Job bleibt rot, weil die **WebKit-Projekte 9 Tests
+  verlieren** (kein Syslib-Problem, sondern echte Testfehler) — separater Defekt
+  **D24** in `docs/REVIEW.md`. Eine CI-Iteration kostet ~10 min; ein lokaler
+  WebKit-Lauf ist in der Sandbox nicht möglich (fehlende Syslibs), weshalb die
+  D24-Analyse an den CI-Läufer gebunden bleibt.
