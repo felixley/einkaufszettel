@@ -405,9 +405,15 @@ export default function ListsPage() {
           placeholder="Artikel hinzufügen …"
           className={styles.addInput}
           aria-label="Neuer Artikel"
+          // T4.6/axe: aria-expanded ist auf role="textbox" nicht erlaubt;
+          // die ARIA-1.2-Combobox-Rolle erlaubt es (aria-controls nur wenn offen).
+          role="combobox"
+          aria-haspopup="listbox"
           aria-autocomplete="list"
           aria-expanded={showSuggestions && suggestions.length > 0}
-          aria-controls="item-suggestions"
+          aria-controls={
+            showSuggestions && suggestions.length > 0 ? 'item-suggestions' : undefined
+          }
           aria-activedescendant={
             activeSuggestion >= 0 ? `item-suggestion-${activeSuggestion}` : undefined
           }

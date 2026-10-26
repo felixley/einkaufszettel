@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-const THEME_COLOR = '#1f6feb';
+const THEME_COLOR = '#1c66e0';
 const BACKGROUND_COLOR = '#f7f7f8';
 
 /**

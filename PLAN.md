@@ -138,7 +138,7 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
 - [ ] **T4.3** Fehlerbehandlung: Sync-Fehlerstatus, Retry mit Backoff, Dead-Letter-Anzeige für dauerhaft fehlgeschlagene Outbox-Einträge.
 - [x] **T4.4** UI-Polish: Responsive, Dark Mode (System + Toggle), Micro-Interactions, Leere Zustände, Skeletons.
 - [x] **T4.5** Mobile-Ergonomie: Große Touch-Ziele (≥44 px), Eingabefeld unten erreichbar, schnelles Hinzufügen (Enter bleibt im Feld, Autovervollständigung aus Historie), Swipe zum Abhaken/Löschen. _AK:_ Hinzufügen eines Artikels in ≤2 Taps.
-- [ ] **T4.6** Barrierefreiheit-Basis (Kontrast, Fokus, Labels), axe-Check in CI.
+- [x] **T4.6** Barrierefreiheit-Basis (Kontrast, Fokus, Labels), axe-Check in CI. _AK:_ axe auf Login/Liste/Rezepte/Haushalt 0 serious/critical in beiden Projekten; Nachweis `docs/TESTLOG-T4.6.md`.
 
 ### Phase 5 – Test, Betrieb & Go-Live
 

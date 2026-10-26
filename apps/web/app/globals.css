@@ -11,7 +11,9 @@
   --muted: #5b6270;
   --card: #ffffff;
   --border: #d7dae0;
-  --primary: #1f6feb;
+  /* T4.6: 4.9:1 auf --bg (#f7f7f8) und 5.2:1 mit weißer Schrift —
+     vorher #1f6feb mit nur 4.32:1 (WCAG AA verfehlt). */
+  --primary: #1c66e0;
   --primary-fg: #ffffff;
   --danger-bg: #fdecec;
   --danger-fg: #a11616;
