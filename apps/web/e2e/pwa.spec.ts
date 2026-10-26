@@ -50,7 +50,15 @@ test.describe('PWA-Grundlage (T4.1)', () => {
     );
   });
 
-  test('Service Worker kontrolliert die Seite nach Reload', async ({ page }) => {
+  test('Service Worker kontrolliert die Seite nach Reload', async ({ page, browserName }) => {
+    // T5.1: Playwright dokumentiert Service-Worker-Unterstuetzung nur fuer
+    // Chromium-Browser (playwright.dev/docs/service-workers). WebKit-Projekte
+    // ueberspringen diesen SW-Kontrollnachweis; der echte WebKit-Lauf ist ein
+    // offener Host-/CI-Punkt (siehe docs/TESTLOG-T5.1.md).
+    test.skip(
+      browserName === 'webkit',
+      'WebKit: Service-Worker-Kontrolle nicht garantiert (Playwright-Support nur Chromium).',
+    );
     const consoleErrors: string[] = [];
     page.on('console', (message) => {
       if (message.type() === 'error') consoleErrors.push(message.text());

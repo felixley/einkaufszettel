@@ -16,9 +16,11 @@ concurrency:
 
 jobs:
   e2e:
-    name: 'Playwright (Auth: Register -> Login -> Logout)'
+    name: 'Playwright (Chromium + WebKit-Mobile, alle Projekte)'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Vier Projekte (chromium, mobile-chromium, webkit, mobile-webkit) und
+    # CI-Retries: 15 Minuten waren fuer zwei Projekte knapp, 25 gibt Luft.
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,18 +40,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright browser
-        run: pnpm --filter @einkaufszettel/web exec playwright install --with-deps chromium
+      # T5.1: beide Engines installieren — Chromium (Desktop + Pixel 7) und
+      # WebKit (Desktop Safari + iPhone 14). `--with-deps` zieht die noetigen
+      # Systembibliotheken auf dem Ubuntu-Runner nach.
+      - name: Install Playwright browsers (Chromium + WebKit)
+        run: pnpm --filter @einkaufszettel/web exec playwright install --with-deps chromium webkit
 
       # Laeuft ohne Netz und ohne Secrets: die App nutzt im Test den
       # Mock-Auth-Adapter (NEXT_PUBLIC_AUTH_MOCK=true, siehe playwright.config.ts).
       - name: Run E2E tests
         run: pnpm test:e2e
 
-      - name: Upload Playwright report
+      - name: Upload Playwright report and traces
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: apps/web/playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
           retention-days: 7

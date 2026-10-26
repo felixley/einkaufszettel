@@ -104,7 +104,18 @@ test('Szenario A: Supermarkt ohne Netz — Offline-CRUD, Offline-Reload, Reconne
   page,
   context,
   request,
+  browserName,
 }) => {
+  // T5.1: WebKit bricht bei aktivem Service Worker die Navigation nach
+  // `context.setOffline(true)` ab (microsoft/playwright#42775); der
+  // Offline-Reload-Schritt ist dort nicht verlaesslich pruefbar. Die
+  // Offline-CRUD-Pfade ohne SW-Reload deckt `multiDeviceOffline.spec.ts` und
+  // `recipes.spec.ts` auch in WebKit ab. Folgekarte fuer einen WebKit-tauglichen
+  // SW-Reload siehe docs/TESTLOG-T5.1.md.
+  test.skip(
+    browserName === 'webkit',
+    'WebKit: setOffline + Service-Worker-Navigation fehlerhaft (playwright#42775).',
+  );
   const email = uniqueEmail('supermarkt');
   await registerAndLogin(page, email);
   const scope = await readScope(page);

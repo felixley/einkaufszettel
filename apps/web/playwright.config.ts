@@ -38,6 +38,12 @@ function resolveChromiumExecutable(): string | undefined {
 }
 
 const chromiumExecutablePath = resolveChromiumExecutable();
+// Der Sandbox-Guard gilt nur fuer Chromium. Global gesetzt wuerde der Pfad auch
+// auf die WebKit-Projekte angewendet und deren Start mit einer Chromium-Binary
+// fehlschlagen. Deshalb wird er pro Projekt (nur Chromium) gemerged.
+const chromiumLaunchOptions = chromiumExecutablePath
+  ? { launchOptions: { executablePath: chromiumExecutablePath } }
+  : {};
 
 const PORT = Number(process.env.E2E_PORT ?? 3210);
 // `localhost` statt 127.0.0.1: Next.js blockt Dev-Ressourcen (HMR/Chunks) als
@@ -57,13 +63,14 @@ export default defineConfig({
     baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    ...(chromiumExecutablePath
-      ? { launchOptions: { executablePath: chromiumExecutablePath } }
-      : {}),
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile-chromium', use: { ...devices['Pixel 7'] } },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'], ...chromiumLaunchOptions } },
+    { name: 'mobile-chromium', use: { ...devices['Pixel 7'], ...chromiumLaunchOptions } },
+    // T5.1: WebKit-Abdeckung. Desktop-WebKit (Safari) ist optional, aber billig;
+    // mobile-webkit bildet die im PLAN geforderte iPhone-Emulation ab.
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    { name: 'mobile-webkit', use: { ...devices['iPhone 14'] } },
   ],
   webServer: {
     command: `pnpm dev --port ${PORT}`,

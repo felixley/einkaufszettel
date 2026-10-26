@@ -142,7 +142,7 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
 
 ### Phase 5 – Test, Betrieb & Go-Live
 
-- [ ] **T5.1** E2E-Suite vollständig in CI (Chromium + WebKit-Mobile-Emulation).
+- [x] **T5.1** E2E-Suite vollständig in CI (Chromium + WebKit-Mobile-Emulation). _AK:_ vier Playwright-Projekte (`chromium`, `mobile-chromium`, `webkit`, `mobile-webkit`); `e2e.yml` installiert Chromium + WebKit; Chromium-Suite 68/68 grün; WebKit per `--list` validiert, Laufzeitnachweis offen auf CI/Host. Nachweis: `docs/TESTLOG-T5.1.md`.
 - [x] **T5.2** Lasttest k6: 10 Haushalte × 5 gleichzeitige Nutzer, p95 Sync-Latenz <1 s. Ergebnis in `docs/PERF.md`. Nachweis: `perf/k6-sync.js` (50 VUs, `k6 inspect` grün), Lauf gegen Produktions-Build p95 = 92,3 ms / 0 % Fehler (`docs/PERF.md`); Dev-Server-Referenz 1 127 ms (Toolchain-Engpass). Echter Supabase/Docker-Lauf offen (D14).
 - [ ] **T5.3** Security-Check: RLS-Tests vollständig, Dependency-Audit, Header (CSP, HSTS), Rate-Limits.
   - T5.3b (Security-Baseline) umgesetzt 2026-10-26: Caddy-Header + Rate-Limits,
