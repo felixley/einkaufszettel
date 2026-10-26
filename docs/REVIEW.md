@@ -772,7 +772,7 @@ Status nach Behebung der E2E-Befunde. Alle Läufe in dieser Sandbox, Mock-Modus 
 
 ### 10.1 Prüfumfang und Umgebung
 
-- Alle vier Karten sind `done`; HEAD = `1ce0cdc` (origin/master identisch, `git ls-remote` bestätigt).
+- Alle vier Karten sind `done`; geprüfter Code-Stand = `1ce0cdc` (QA-Report als Folge-Commit auf origin/master; `git ls-remote` bestätigte den Stand vor dem Report).
 - Sandbox-Grenzen: kein Docker-Daemon, keine Supabase-CLI/PostgREST/Realtime. pgTAP daher gegen Vanilla PostgreSQL 16.2 + Supabase-Shim (`bootstrap.sql`, `pgtap_ready.sql`, Rollen `anon`/`authenticated`/`service_role`, `auth.uid()`); E2E im Mock-Auth-Modus wie im CI-Workflow. Das ist dieselbe dokumentierte Umgebungsgrenze wie in Welle 1/2 (D3/D8.5) und kein Welle-3-Blocker.
 
 ### 10.2 Durchgeführte Tests mit echtem Output
