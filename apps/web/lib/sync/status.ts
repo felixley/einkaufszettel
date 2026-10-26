@@ -6,7 +6,12 @@
  * Browser-/Dexie-Abhängigkeiten und damit unit-testbar.
  */
 
-export type SyncMode = 'supabase' | 'mock';
+/**
+ * `mock` = Dev-Mock ohne Sync-Gegenstelle (LocalOnlySyncAdapter, „Nur lokal“).
+ * `mock-sync` = Dev-Mock mit In-Memory-Sync-Server + Polling-Realtime (T4.2a);
+ * verhält sich statusseitig wie ein echter Server, nur ohne Persistenz.
+ */
+export type SyncMode = 'supabase' | 'mock' | 'mock-sync';
 
 export type SyncState =
   'synced' | 'pending' | 'syncing' | 'offline' | 'error' | 'local-only' | 'signed-out';
@@ -114,7 +119,10 @@ export function computeSyncStatus(input: SyncStatusInput): SyncStatus {
     ...base,
     state: 'synced',
     label: 'Synchronisiert',
-    detail: 'Alle lokalen Änderungen sind auf dem Server angekommen.',
+    detail:
+      input.mode === 'mock-sync'
+        ? 'Alle lokalen Änderungen sind auf dem Dev-Mock-Server angekommen (nicht persistent).'
+        : 'Alle lokalen Änderungen sind auf dem Server angekommen.',
     tone: 'success',
   };
 }

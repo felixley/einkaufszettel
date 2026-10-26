@@ -267,3 +267,47 @@ public.categories` → **13**, `category_rules` → **389**; zweiter
   Einträge werden unverändert quittiert. Reine Funktionen, keine I/O; die
   Rückwärtskompatibilität bleibt durch optionale Felder erhalten. Die
   Worker-/UI-Verdrahtung folgt in T4.3b, daher bleibt die PLAN-Checkbox offen.
+
+## 2026-10-26 — Dev-Mock-Sync-Server + Mock-Realtime (T4.2a)
+
+- **Entscheidung 1 — In-Memory statt echter Backend-Mock:** Im Mock-Auth-Modus
+  gibt es weiterhin kein Supabase/GoTrue. Für die T4.2-Szenarien („Supermarkt
+  ohne Netz“, „zwei Geräte offline, dann online“) genügt eine In-Memory-
+  Gegenstelle im Dev-Server-Prozess (`app/api/mock/sync/route.ts`). Zwei
+  Browser-Kontexte sehen denselben Zustand, weil der Zustand serverseitig
+  liegt — anders als bei `LocalOnlySyncAdapter`, der nur lokal quittiert.
+  Nichts wird persistiert; Neustart des Dev-Servers = leerer Store. Die Route
+  ist dev-only: `isMockAuth()` false ⇒ 404. Keine Authentifizierung, kein
+  Produktionspfad.
+- **Entscheidung 2 — Feldweises LWW serverseitig:** Der Outbox-Vertrag schickt
+  nur geänderte Felder, aber keine Client-Zeitstempel (`ListItemRowData`).
+  Deshalb stempelt der Server genau diese Felder mit einer monotonen Serveruhr;
+  der zuletzt eingetroffene Schreibvorgang gewinnt pro Feld. Gleichstand kann
+  durch die Monotonie nicht entstehen; der bereits gespeicherte Serverstand
+  bleibt bei inhaltlich identischen Werten unangetastet (idempotenter Upsert).
+  Soft-Delete setzt einen Tombstone; ein späterer Edit belebt die Zeile nicht
+  wieder. `add_to_list` ruft den reinen Core-Aggregator auf, dedupliziert über
+  `request_id` und aggregiert nach normalisiertem Namen + Einheiten-Dimension.
+- **Entscheidung 3 — Sync-Scope in der App:** Der Mock-Adapter erhält einen
+  `scope`-String. `SyncProvider` bevorzugt die zuletzt gecachte Haushalts-ID
+  (`lib/recipes/household-cache.ts`), sonst die Auth-Nutzer-ID als dev-only
+  Isolation. Damit konvergieren zwei Geräte desselben Haushalts; für Haushalte
+  ohne Cache bleibt die Nutzer-ID als pragmatischer Fallback. In Produktion
+  bleibt die Haushaltszuordnung/RLS unverändert bei Supabase.
+- **Entscheidung 4 — Mock-Realtime per Polling:** Statt WebSocket/SSE pollt
+  `MockRealtimeSource` die Route alle 1,5 s mit `since`-Cursor. Begründung:
+  keine neue Runtime-Abhängigkeit, robust gegen Reconnects, einfacher Test.
+  Fehler/Offline werden still übergangen; der Worker meldet den Status separat.
+  Der Cursor ist die jüngste Serverzeit des Scopes; die Uhr ist monoton, damit
+  zwei Schreibvorgänge in derselben Millisekunde keine Zeile überspringen.
+- **Entscheidung 5 — Status-Modus `mock-sync`:** `SyncMode` erhält
+  `'mock-sync'`. Nur `'mock'` (LocalOnly) zeigt weiterhin „Nur lokal (Dev)“;
+  `'mock-sync'` durchläuft die normalen Zustände synced/pending/offline/error/
+  signed-out. `SyncProvider` mappt Auth-Modus `mock` auf Worker-Modus
+  `mock-sync` und instanziiert Mock-Adapter + Polling-Realtime. Der reine
+  `LocalOnlySyncAdapter` bleibt als `'mock'` für Unit-Tests erhalten. Im
+  Supabase-Modus bleibt alles unverändert.
+- **Risiko/Status:** Dev-only, keine Secrets, keine Persistenz. `pnpm lint`,
+  `pnpm typecheck`, `pnpm test` grün (269 Tests, 23 Dateien). Nachweis:
+  `docs/TESTLOG-T4.2a.md` (Konvergenz 24 ms, Idempotenz, Aggregation,
+  Soft-Delete, Cursor). E2E-„zwei Geräte offline/online“ folgt in T4.2b.

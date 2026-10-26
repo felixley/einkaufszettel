@@ -55,11 +55,22 @@ describe('computeSyncStatus', () => {
     expect(status.detail).toBe('RLS verweigert');
   });
 
-  it('kennzeichnet den Mock-Modus als nur lokal', () => {
+  it('kennzeichnet den Mock-Modus ohne Sync-Gegenstelle als nur lokal', () => {
     const status = computeSyncStatus(input({ mode: 'mock' }));
     expect(status.state).toBe('local-only');
     expect(status.label).toBe('Nur lokal (Dev)');
     expect(status.tone).toBe('muted');
+  });
+
+  it('zeigt im Mock-Sync-Modus normale Server-Zustaende', () => {
+    expect(computeSyncStatus(input({ mode: 'mock-sync' })).state).toBe('synced');
+    expect(computeSyncStatus(input({ mode: 'mock-sync', pendingCount: 2 })).state).toBe('pending');
+    expect(computeSyncStatus(input({ mode: 'mock-sync', online: false })).state).toBe('offline');
+    expect(computeSyncStatus(input({ mode: 'mock-sync', deadLetterCount: 1 })).state).toBe('error');
+    expect(computeSyncStatus(input({ mode: 'mock-sync', signedIn: false })).state).toBe(
+      'signed-out',
+    );
+    expect(computeSyncStatus(input({ mode: 'mock-sync' })).detail).toContain('Dev-Mock-Server');
   });
 
   it('kennzeichnet abgemeldete Nutzer', () => {
