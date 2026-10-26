@@ -300,3 +300,64 @@ _Ergänzung von architect (Datum: 2026-10-26). Additiv: §0–§7, Anhang A und 
 - Echter Supabase-E2E-Lauf (PostgREST/Realtime, zwei Geräte) bleibt auf einem Docker-Host nachzuholen (analog D14); der Mock-Sync-Nachweis ersetzt ihn in dieser Umgebung.
 - T1.3 (Compose/HTTPS-Laufzeitnachweis) weiterhin offen; für Installation/PWA im echten Betrieb ist HTTPS Voraussetzung — localhost gilt als sicherer Kontext für Lighthouse/Playwright.
 - Lighthouse-Version: Ab Lighthouse 12 gibt es keine „PWA“-Kategorie mehr; C-1 präzisiert daher auf die Installability-Audits.
+
+---
+
+## Anhang D — Welle 5: Phase 5 (Test, Betrieb & Go-Live) — Kartenschnitt und prüfbare AKs
+
+_Ergänzung von architect (Datum: 2026-10-26). Additiv: §0–§7, Anhang A–C bleiben unverändert maßgeblich; die AKs in §5 bleiben die verbindliche Kurzform, dieser Anhang präzisiert sie auf Prüf-Ebene. **Human Gate 3 bleibt beim PO**; T5.5 (Dogfooding) und T5.6 (Release v1.0.0) werden erst nach Gate 3 geschnitten. Geschnitten sind T5.1–T5.4 sowie die erlaubte T5.5-Vorbereitung._
+
+### D.1 Ausgangslage
+
+- Phase 1–4 sind fertig und QA-abgenommen (`docs/REVIEW.md`, Welle 4 bestanden; Befunde D15–D20 dokumentiert, D15 behoben).
+- Offene Umgebungspunkte aus Welle 1–4: **D14** (kein Real-Backend-E2E gegen PostgREST/Realtime), **D16** (Zwei-Nutzer-Haushalts-E2E offen), **D19** (axe deckt Dead-Letter-Dialog nicht separat ab), **T1.3** (Compose-/HTTPS-Laufzeitnachweis) — alle nur auf einem Docker-Host nachholbar.
+- **Sandbox-Grenzen dieser Welle (verbindlich für den Kartenschnitt):**
+  - Kein Docker-Daemon, kein `psql`, kein `$HOME/pg-shim` → pgTAP/RLS-Läufe, Restore-Test und Compose-Validierung sind hier nicht ausführbar.
+  - Playwright-WebKit lässt sich installieren (`webkit-2370`), aber die Systembibliotheken `libsecret-1.so.0`, `libhyphen.so.0`, `libGLESv2.so.2`, `libx264.so` fehlen; ohne root/apt ist kein echter WebKit-Lauf möglich.
+  - k6 ist nicht installiert; ein Download ist zu versuchen, der echte 50-VU-Lauf gegen Supabase bleibt Host-Nachweis.
+  - `caddy`-Binary fehlt → Header-/Rate-Limit-Konfiguration ist per Node-Prüfskript auf Konfig-Ebene zu belegen; `caddy validate` bleibt Host-Nachweis.
+  - `pnpm` ist nicht im PATH; `node_modules` und Vitest/Playwright-Binaries sind vorhanden, Tests laufen über `./node_modules/.bin/...`.
+- **Nicht geschnitten:** T5.5 (Durchführung) und T5.6 (Release/Tagging) — Vorgriff auf Gate 3 wäre regelwidrig. T5.5-Vorbereitung (Doku/Vorlage) ist erlaubt und als eigene Karte geschnitten.
+
+### D.2 Karten und Abhängigkeiten
+
+| Karte                        | ID           | Profil   | Inhalt                                                                                                                          | Abhängig von                     |
+| ---------------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| T5.1 E2E-Suite CI            | `t_1fb12e66` | frontend | Playwright-Projekte `webkit`/`mobile-webkit` (iPhone), `e2e.yml` installiert Chromium+WebKit, Suite über alle Projekte, Testlog | —                                |
+| T5.2 k6-Lasttest             | `t_d87fc882` | core     | `perf/k6-sync.js` (10 Haushalte × 5 VUs, p95 <1 s), `docs/PERF.md`, Lauf gegen Mock-Sync-Stack                                  | T5.1 (empfohlen, Link abgelehnt) |
+| T5.3a RLS-Abdeckung          | `t_5fb3079e` | backend  | Abdeckungsmatrix aller Tabellen/Policies/RPCs, Lücken schließen, `run_local_verify.sh` erweitern                                | —                                |
+| T5.3b Security-Baseline      | `t_0094b32d` | devops   | CSP/HSTS/Header, Rate-Limits (Caddy-Plugin), Dependency-Audit, `scripts/check-security-config.mjs`, `docs/SECURITY.md`          | T5.3a (Checkbox-Abschluss)       |
+| T5.4 Betrieb                 | `t_cc7a72cf` | devops   | Backup-Härtung/Retention, `restore.sh` + `test-restore.sh` (Stub/Dry-Run), Update-Doku, Healthchecks, Logrotation, Monitoring   | —                                |
+| T5.5-Vorbereitung Dogfooding | `t_ade04faa` | frontend | `docs/DOGFOODING.md` + `docs/FEEDBACK.md` (Vorlage), keine Durchführung                                                         | —                                |
+
+> **Hinweis zum Kartenschnitt (Body-Verlust-Bug aus Welle 4):** Der Karten-Body von T5.1 ging beim Anlegen technisch verloren; die vollständigen Spezifikationen (Ziel, Ist-Stand, Soll, AK, Sandbox-Grenze, Pfade, Constraints, Abhängigkeiten, offene Fragen) liegen deshalb als **Kommentar** an jeder Karte und sind dort maßgeblich. Mehrere Karten wurden vom Dispatcher sofort gestartet, bevor die Verlinkung gesetzt war; `kanban_link` (T5.2 → T5.1) wurde mit „child is already running“ abgelehnt. Die Abhängigkeit ist im Kommentar von T5.2 dokumentiert; falls T5.1 bei Bearbeitung von T5.2 nicht fertig ist, gilt `kanban_block(kind="dependency")`.
+
+### D.3 Prüfbare Akzeptanzkriterien
+
+| #   | Feature (Plan-ID)              | Testbares Akzeptanzkriterium                                                                                                                                                                                                                                                                                                                                                                    | Nachweis / Artefakt                                                                                        |
+| --- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| D-1 | E2E-Suite in CI (T5.1)         | Projekte `chromium`, `mobile-chromium`, `webkit`, `mobile-webkit` (iPhone) definiert; `e2e.yml` installiert Chromium+WebKit mit System-Deps und führt alle 13 Specs über alle Projekte aus; Chromium-Projekte in der Sandbox ohne Regression grün (68/68); WebKit-Konfiguration per `playwright test --list` validiert; WebKit-Laufzeitnachweis als offener CI-/Docker-Host-Punkt dokumentiert. | CI-Lauf, `docs/TESTLOG-T5.1.md`, Konfig-Diff, PLAN-Checkbox T5.1                                           |
+| D-2 | k6-Lasttest 10×5 (T5.2)        | k6-Skript mit 10 Haushalten × 5 VUs (50 VUs), Ramp-up, Thresholds p95 <1000 ms und Fehlerrate <1 %; Lauf gegen Mock-Sync-Stack dokumentiert (oder als Host-Nachweis offen, falls k6 nicht lauffähig); `docs/PERF.md` mit Messwerten und Reproduktionsanleitung.                                                                                                                                 | `perf/k6-sync.js`, `docs/PERF.md`, PLAN-Checkbox T5.2                                                      |
+| D-3 | RLS-Abdeckung (T5.3a)          | Matrix aller 10 Tabellen × Operationen × RPCs vollständig; jede Lücke mit Test oder begründeter Restlücke; neue/erweiterte pgTAP-Suiten im Runner registriert; statische Prüfung + `bash -n` grün; echter pgTAP-Lauf als Docker-/PG-Host-Nachweis offen.                                                                                                                                        | `docs/SECURITY-RLS-COVERAGE.md`, `supabase/tests/*.sql`, Runner-Diff                                       |
+| D-4 | Security-Baseline (T5.3b)      | Caddyfile enthält CSP, HSTS, X-Frame-Options/frame-ancestors, Referrer-/Permissions-Policy, nosniff; Rate-Limit-Zonen für `/auth/v1/*` und `add_to_list`; `scripts/check-security-config.mjs` grün und in CI; `npm audit --omit=dev` dokumentiert (0 high/critical oder begründete Ausnahme); `docs/SECURITY.md`; `caddy validate` offen.                                                       | `scripts/check-security-config.mjs`, CI-Lauf, `docs/SECURITY.md`, PLAN-Checkbox T5.3 (gemeinsam mit T5.3a) |
+| D-5 | Betrieb (T5.4)                 | `restore.sh` + `test-restore.sh` vorhanden, `bash -n` grün; Restore-Test im Stub-/Dry-Run-Modus grün oder als offener Docker-/PG-Host-Nachweis; Backup-Retention + Integritätsprüfung implementiert; `docs/OPERATIONS.md` deckt Update, Healthchecks, Logrotation, Monitoring, Cert-Expiry, Backup/Restore ab; Compose-Logging konfiguriert.                                                    | Skripte, `docs/OPERATIONS.md`, `docker-compose.yml`, PLAN-Checkbox T5.4                                    |
+| D-6 | Dogfooding-Vorbereitung (T5.5) | `docs/DOGFOODING.md` (2-Wochen-Ablauf, Rollen, Testfälle, Known Issues, Eskalation) und `docs/FEEDBACK.md` (Vorlage inkl. Schweregrad/Reproduktion) vorhanden und ohne weitere Erklärung nutzbar; **keine** Checkbox T5.5, keine Durchführung.                                                                                                                                                  | Beide Dokumente; PLAN-Checkbox T5.5 bleibt offen                                                           |
+
+### D.4 Entscheidungen
+
+- **T5.1 bei `frontend`, nicht `devops`:** Die Arbeit ist überwiegend Playwright-Konfiguration, projektbezogene Skips und WebKit-Kompatibilität der Suite; der Workflow-Eingriff in `e2e.yml` ist klein. `devops` bleibt für T5.3b/T5.4 reserviert. Welle-4-Präzedenz: neue Specs laufen über die bestehende `e2e.yml` ohne Workflow-Umbau.
+- **T5.2 bei `core` (Auftrag nennt core/devops):** Das Skript ist framework-frei, die Lasttest-Semantik (Idempotenz per `request_id`, Outbox-Upsert) gehört fachlich zum Core; `devops` ist mit T5.3b/T5.4 ausgelastet. Der k6-Lauf gegen den Mock-Sync-Stack bleibt Dev-Modus.
+- **T5.3 geteilt (`3a` backend / `3b` devops):** Disjunkte Pfade — `3a` ändert ausschließlich `supabase/tests/**` + Abdeckungsdoku, `3b` ausschließlich Caddy/CI/Security-Doku. Getrennte Karten vermeiden Kollisionen und passen zu den Profilen. Checkbox T5.3 tickt `3b` erst nach Abschluss von `3a`.
+- **T5.4 als eine `devops`-Karte:** Backup, Restore, Update, Healthchecks, Logrotation und Monitoring greifen in dieselben Dateien (`scripts/`, `docker-compose.yml`, `OPERATIONS.md`) ein; eine Karte vermeidet Kollisionen. Restore-Test ist stub-/dry-run-fähig zu bauen.
+- **T5.5 nur Vorbereitung:** Durchführung und Checkbox bleiben nach Gate 3; die Karte liefert ausschließlich Anleitung und Feedback-Vorlage.
+- **Sandbox-Ersatznachweise statt AK-Verschiebung:** WebKit → Konfig-/CI-Nachweis + offener Lauf; k6 → Skript + Mock-Sync-Lauf bzw. Host-Anleitung; RLS → statische Matrix + offener pgTAP-Lauf; Header/Rate-Limits → Node-Konfigprüfung + offenes `caddy validate`; Restore → Stub-/Dry-Run + offener Docker-/PG-Lauf. Diese offenen Punkte sind explizit in D.5 geführt (analog D14/T1.3).
+
+### D.5 Offene Punkte (nicht blockierend für Welle 5)
+
+- **WebKit-Laufzeitnachweis:** Systembibliotheken (`libsecret`, `libhyphen`, `libGLESv2`, `libx264`) fehlen in der Sandbox; echter WebKit-Lauf auf CI bzw. Docker-Host nachzuholen.
+- **k6 50-VU-Lauf gegen echtes Supabase/PostgREST:** In der Sandbox nur Mock-Sync-Stack; echter Lauf bleibt Host-Nachweis (D14).
+- **pgTAP-/RLS-Lauf:** Kein Docker/`psql`/`pg-shim`; Abdeckung ist statisch belegt, der Lauf bleibt Docker-/PG-Host-Nachweis.
+- **`caddy validate` + Header-/Rate-Limit-Verhalten:** Kein Caddy-Binary; Konfig-Ebene belegt, Laufzeit-Verifikation (Header per `curl -I`, 429-Verhalten) bleibt Docker-Host-Nachweis.
+- **Restore-Test gegen echtes PostgreSQL/Compose:** Nur Stub-/Dry-Run in der Sandbox; echter Restore bleibt Docker-Host-Nachweis.
+- **T1.3 (Compose/HTTPS-Laufzeitnachweis)** aus Welle 1; **D14** Real-Backend-E2E; **D16** Zwei-Nutzer-Haushalts-E2E; **D19** axe-Abdeckung des Dead-Letter-Dialogs — unverändert offen, nicht Welle-5-blockierend.
+- **T5.5/T5.6:** bewusst nicht geschnitten; Planung erst nach Human Gate 3 durch den PO.
