@@ -241,6 +241,46 @@ SQL
   [ "${c_pg:-0}" != "0" ] && ok "Regression: 'postgres' enthaelt nach Restore ${c_pg} public-Tabellen" \
                            || ko "Regression: 'postgres' enthaelt nach Restore keine public-Tabellen"
 
+  # Regression (Review Runde 2): DATABASE_URL-Modus. DATABASE_URL liefert nur
+  # Host/Port/User; TARGET_DB ist massgeblich. Beide Faelle laufen ohne libpq-Env
+  # (env -u PGHOST/PGPORT/PGUSER), damit die URL die einzige Verbindungsangabe ist.
+  local url="postgresql://postgres@127.0.0.1:$port/postgres"
+
+  # (a) URL-Pfad != TARGET_DB -> Daten muessen in TARGET_DB landen, URL-DB leer bleiben.
+  createdb ez_urlpath 2>/dev/null || true
+  psql -q -d postgres -c "drop database if exists ez_url_target" >/dev/null 2>&1 || true
+  if env -u PGHOST -u PGPORT -u PGUSER TARGET_DB=ez_url_target \
+       DATABASE_URL="${url%/postgres}/ez_urlpath" RESTORE_CONFIRM=yes \
+       bash "$RESTORE_SH" "$bk" >/dev/null 2>&1; then
+    ok "DATABASE_URL: Restore nach TARGET_DB != URL-Pfad erfolgreich"
+  else
+    ko "DATABASE_URL: Restore nach TARGET_DB != URL-Pfad fehlgeschlagen"
+  fi
+  local n_tgt n_url
+  n_tgt="$(psql -d ez_url_target -tAc "select count(*) from information_schema.tables where table_schema='public'" 2>/dev/null | tr -d '[:space:]')"
+  n_url="$(psql -d ez_urlpath  -tAc "select count(*) from information_schema.tables where table_schema='public'" 2>/dev/null | tr -d '[:space:]')"
+  [ "${n_tgt:-0}" != "0" ] && ok "DATABASE_URL: Zieldaten in TARGET_DB 'ez_url_target' (${n_tgt} Tabellen)" \
+                            || ko "DATABASE_URL: keine Tabellen in ez_url_target"
+  [ "${n_url:-1}" = "0" ] && ok "DATABASE_URL: URL-Pfad-DB 'ez_urlpath' blieb unberuehrt (0 Tabellen)" \
+                          || ko "DATABASE_URL: stiller Falschziel-Restore in 'ez_urlpath' (${n_url} Tabellen)"
+
+  # (b) Disaster-Recovery-Pfad im DATABASE_URL-Modus: URL zeigt auf das Ziel
+  #     selbst, Ziel nicht leer, RESTORE_DROP_EXISTING=yes -> drop/create ueber
+  #     die Maintenance-DB, kein createdb ueber die (ungesetzte) libpq-Env.
+  createdb ez_url_dr 2>/dev/null || true
+  psql -q -d ez_url_dr -c "create table if not exists public.pre(id int)" >/dev/null 2>&1 || true
+  if env -u PGHOST -u PGPORT -u PGUSER TARGET_DB=ez_url_dr \
+       DATABASE_URL="${url%/postgres}/ez_url_dr" RESTORE_CONFIRM=yes RESTORE_DROP_EXISTING=yes \
+       bash "$RESTORE_SH" "$bk" >/dev/null 2>&1; then
+    ok "DATABASE_URL: DR-Pfad (Ziel=URL-Pfad, nicht leer, DROP_EXISTING) exit 0"
+  else
+    ko "DATABASE_URL: DR-Pfad (Ziel=URL-Pfad, DROP_EXISTING) fehlgeschlagen"
+  fi
+  local c_dr
+  c_dr="$(psql -d ez_url_dr -tAc "select count(*) from information_schema.tables where table_schema='public'" 2>/dev/null | tr -d '[:space:]')"
+  [ "${c_dr:-0}" != "0" ] && ok "DATABASE_URL: DR-Ziel 'ez_url_dr' enthaelt nach Restore ${c_dr} Tabellen (Live-DB erhalten)" \
+                          || ko "DATABASE_URL: DR-Ziel 'ez_url_dr' ist nach Restore leer (Live-DB verloren)"
+
   # Negativ-Test: Retention loescht nur alte Archive
   touch -d '30 days ago' "$work/backups/einkaufszettel-old.sql.gz" "$work/backups/einkaufszettel-old.meta"
   BACKUP_DIR="$work/backups" POSTGRES_DB=ez_src RETENTION_DAYS=14 \

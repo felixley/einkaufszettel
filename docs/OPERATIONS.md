@@ -95,9 +95,18 @@ docker compose pull && docker compose up -d
 # Schema vorwaerts migriert: Backup zurueckspielen (siehe Abschnitt 5).
 ```
 
-Verifikation nach dem Rollback: `git show HEAD:docker-compose.yml | grep -n
-'image:'` zeigt wieder die alten Tags; `docker compose ps` alle Dienste
-`healthy`; `curl -fsS "https://${DOMAIN}/health"` liefert `{"status":"ok"}`.
+Verifikation nach dem Rollback (je nach Variante — die Referenz unterscheidet
+sich!):
+
+- **Variante A (Revert-Commit):** `HEAD` zeigt jetzt auf den Revert →
+  `git show HEAD:docker-compose.yml | grep -n 'image:'` zeigt wieder die alten
+  Tags.
+- **Variante B (Checkout ohne Commit):** `HEAD` bleibt unverändert → hier den
+  Worktree-Stand prüfen: `git diff --cached -- docker-compose.yml` bzw.
+  `grep -n 'image:' docker-compose.yml` (der Checkout staged die alten Tags).
+
+In beiden Fällen danach: `docker compose ps` alle Dienste `healthy`;
+`curl -fsS "https://${DOMAIN}/health"` liefert `{"status":"ok"}`.
 
 ---
 
@@ -201,17 +210,27 @@ demselben Datenträger schützt nicht gegen Hardware-Ausfall.
 - Vorprüfung: Datei vorhanden, `gzip -t`, PostgreSQL-Dump-Kopf.
 - `psql -v ON_ERROR_STOP=1` — bricht beim ersten SQL-Fehler ab.
 
-Für `dropdb`/`createdb` nutzt das Skript eine **separate Maintenance-DB**
+Für `drop`/`create` nutzt das Skript eine **separate Maintenance-DB**
 (`MAINT_DB`, Default `template1`; weicht automatisch auf `postgres` aus, falls
 die Wahl mit `TARGET_DB` kollidiert). Damit funktioniert auch ein Restore in die
-Compose-Default-DB **`postgres`** (`POSTGRES_DB`): `dropdb`/`createdb` verbinden
-sich nicht mehr mit der Zieldatenbank selbst, was sonst mit ``cannot drop the
-currently open database`` abbricht. Als Ziel sind nur `template0`/`template1`
-verboten.
+Compose-Default-DB **`postgres`** (`POSTGRES_DB`): die Drop-/Create-Schritte
+verbinden sich nicht mehr mit der Zieldatenbank selbst, was sonst mit `cannot
+drop the currently open database` bzw. `being accessed by other users`
+abbricht. Als Ziel sind nur `template0`/`template1` verboten.
 
-Exit-Codes: `0` Erfolg · `2` Argumente/Datei · `3` fehlende Bestätigung ·
-`4` beschädigtes Archiv · `5` Ziel nicht leer ohne Freigabe · `6`
-Verbindungsfehler · `7` Restore-Fehler.
+**`DATABASE_URL` (libpq-URL):** Die URL liefert **nur Host/Port/User** — der
+DB-Name im URL-Pfad ist für Ziel-Operationen **nicht** maßgeblich. `TARGET_DB`
+bleibt die einzige verbindliche Zielangabe; das Skript ersetzt den Pfad der URL
+intern durch `TARGET_DB` (bzw. `MAINT_DB` für Drop/Create). Weicht der URL-Pfad
+von `TARGET_DB` ab, wird das im Log als Hinweis gemeldet, es wird aber **immer**
+nach `TARGET_DB` geschrieben — kein stiller Falschziel-Restore. Der Modus ist
+damit vollständig selbstständig: `drop`/`create`/Restore laufen alle über die
+(umgeschriebene) URL und benötigen **keine** `PGHOST`/`PGPORT`-Umgebungsvariablen.
+
+Exit-Codes: `0` Erfolg · `1` unerwarteter interner Fehler · `2` Argumente/Datei ·
+`3` fehlende Bestätigung · `4` beschädigtes Archiv · `5` Ziel nicht leer ohne
+Freigabe · `6` Verbindungsfehler / Ziel fehlt / Vorbereitung (Drop/Create)
+fehlgeschlagen · `7` Restore-Fehler.
 
 ### 5.1 Regelbetrieb: Restore zuerst testen, dann scharf schalten
 
@@ -275,21 +294,30 @@ bash scripts/test-restore.sh --mode dry-run   # nur Archiv-Vorpruefung
 6. Negativ-Tests: Überschreibschutz (Exit 5), Retention löscht nur Alte.
 7. **Regression** (Fix Review-Runde 1): Restore in die Compose-Default-DB
    `postgres` — erst leer (ohne Drop), dann mit `RESTORE_DROP_EXISTING=yes`
-   (erzwingt `dropdb`/`createdb` über die Maintenance-DB `template1`); prüft,
-   dass `postgres` danach die Fachtabellen enthält.
+   (erzwingt Drop/Create über die Maintenance-DB `template1`); prüft, dass
+   `postgres` danach die Fachtabellen enthält.
+8. **Regression** (Fix Review-Runde 2, `DATABASE_URL`-Modus, ohne libpq-Env):
+   - **URL-Pfad ≠ `TARGET_DB`:** Restore landet in `TARGET_DB`; die im URL-Pfad
+     genannte DB bleibt unberührt (kein stiller Falschziel-Restore).
+   - **DR-Pfad (URL zeigt auf das Ziel selbst, Ziel nicht leer,
+     `RESTORE_DROP_EXISTING=yes`):** Drop/Create laufen über die
+     (umgeschriebene) Maintenance-URL, Exit 0, die Live-DB bleibt erhalten.
 
 PostgreSQL-Binaries werden gesucht in `$PG_BIN`, `$PATH`, `pg_config --bindir`
 und bekannten portablen Pfaden.
 
 **Lokaler Nachweis dieser Welle** (siehe
-[`docs/TESTLOG-T5.4.md`](./TESTLOG-T5.4.md)): 32/32 Checks grün, u. a.
+[`docs/TESTLOG-T5.4.md`](./TESTLOG-T5.4.md)): 37/37 Checks grün, u. a.
 
 ```
-categories         count=13 md5=7aade0b5cc2e
-category_rules     count=389 md5=bac52a87da11
+categories         count=13 md5=560784a3e0b3
+category_rules     count=389 md5=e6a8c018475b
 alle Tabellen: count UND md5 identisch (vollstaendig, bit-genau)
 Regression: TARGET_DB=postgres mit Drop/Create ueber Maintenance-DB erfolgreich
-==== ERGEBNIS: 32 bestanden, 0 fehlgeschlagen (Modus real) ====
+DATABASE_URL: Zieldaten in TARGET_DB 'ez_url_target' (11 Tabellen)
+DATABASE_URL: URL-Pfad-DB 'ez_urlpath' blieb unberuehrt (0 Tabellen)
+DATABASE_URL: DR-Ziel 'ez_url_dr' enthaelt nach Restore 11 Tabellen (Live-DB erhalten)
+==== ERGEBNIS: 37 bestanden, 0 fehlgeschlagen (Modus real) ====
 ```
 
 Auf einem Host **ohne** PostgreSQL-Binaries läuft `--mode auto` auf `stub`

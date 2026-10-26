@@ -26,18 +26,21 @@
 #   RESTORE_DROP_EXISTING=yes  erlaubt das Verwerfen eines nicht-leeren Ziels
 #   RESTORE_DRY_RUN=1    nur Pruefungen, kein DB-Zugriff
 #   POSTGRES_USER        DB-User (Default: postgres)
-#   MAINT_DB             Maintenance-DB fuer dropdb/createdb (Default: template1).
+#   MAINT_DB             Maintenance-DB fuer drop/create (Default: template1).
 #                        Wird automatisch auf template1 bzw. postgres ausgewichen,
 #                        wenn sie mit TARGET_DB identisch waere. Dadurch funktioniert
 #                        auch TARGET_DB=postgres (Compose-Default).
-#   DATABASE_URL         vollstaendige libpq-URL (optional; Zieldb muss passen)
+#   DATABASE_URL         libpq-URL. Liefert nur Host/Port/User — der DB-Name im
+#                        URL-Pfad wird fuer Ziel-Operationen durch TARGET_DB
+#                        ersetzt, damit TARGET_DB massgeblich bleibt (kein
+#                        stiller Falschziel-Restore).
 #   PGHOST/PGPORT/PGPASSWORD  libpq-Einzelwerte (optional)
 #   COMPOSE_FILE         Pfad zur Compose-Datei (Default: <repo>/docker-compose.yml)
 #
 # Exit-Codes:
-#   0 Erfolg | 2 Argumente/Datei | 3 fehlende Bestaetigung | 4 beschaedigtes
-#   Archiv | 5 Ziel nicht leer ohne Freigabe | 6 Verbindungsfehler/Ziel fehlt |
-#   7 Restore-Fehler
+#   0 Erfolg | 1 unerwarteter interner Fehler | 2 Argumente/Datei | 3 fehlende
+#   Bestaetigung | 4 beschaedigtes Archiv | 5 Ziel nicht leer ohne Freigabe |
+#   6 Verbindungsfehler/Ziel fehlt/Vorbereitung fehlgeschlagen | 7 Restore-Fehler
 # =============================================================================
 set -euo pipefail
 
@@ -45,7 +48,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/docker-compose.yml}"
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
 TARGET_DB="${TARGET_DB:-}"
-# Maintenance-DB fuer dropdb/createdb. Default template1, damit ein Restore in
+# Maintenance-DB fuer drop/create. Default template1, damit ein Restore in
 # die DB "postgres" (Compose-Default POSTGRES_DB) nicht gegen die eigene
 # Session laeuft. Ist die gewaehlte Maintenance-DB == TARGET_DB, wird auf die
 # jeweils andere sichere Maintenance-DB ausgewichen.
@@ -57,7 +60,30 @@ fi
 log() { printf '%s [restore] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
 usage() {
-  sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,44p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+# --- libpq-URL-Helfer --------------------------------------------------------
+# Liest den DB-Namen aus dem Pfad einer libpq-URL (leer, wenn kein Pfad).
+url_dbname() {
+  local u="${1%%\?*}" rest
+  case "$u" in *://*) rest="${u#*://}" ;; *) printf ''; return 0 ;; esac
+  case "$rest" in */*) rest="${rest#*/}"; printf '%s' "${rest%%/*}" ;; *) printf '' ;; esac
+}
+# Ersetzt den DB-Namen im URL-Pfad (Query bleibt erhalten); haengt ihn an,
+# wenn die URL keinen Pfad hat.
+url_set_db() {
+  local u="$1" db="$2" q="" rest
+  case "$u" in *\?*) q="?${u#*\?}"; u="${u%%\?*}" ;; esac
+  case "$u" in
+    *://*)
+      rest="${u#*://}"
+      case "$rest" in
+        */*) printf '%s/%s%s' "${u%/*}" "$db" "$q" ;;
+        *)   printf '%s/%s%s' "$u" "$db" "$q" ;;
+      esac ;;
+    *) printf '%s%s' "$u" "$q" ;;
+  esac
 }
 
 # --- 0. Argumente ------------------------------------------------------------
@@ -107,25 +133,38 @@ else
 fi
 log "Verbindungsmodus: $MODE  ->  Ziel '$TARGET_DB'"
 
+# DATABASE_URL liefert nur Host/Port/User. Weicht der DB-Name im URL-Pfad von
+# TARGET_DB ab, wird bewusst nach TARGET_DB geschrieben — der URL-Pfad wird fuer
+# alle Ziel-Operationen ersetzt. Das verhindert einen stillen Falschziel-Restore.
+if [ "$MODE" = "local" ] && [ -n "${DATABASE_URL:-}" ]; then
+  url_db="$(url_dbname "$DATABASE_URL")"
+  if [ -n "$url_db" ] && [ "$url_db" != "$TARGET_DB" ]; then
+    log "Hinweis: URL-Pfad '$url_db' != TARGET_DB '$TARGET_DB' — es wird nach '$TARGET_DB' geschrieben (URL nur Host/Port/User)."
+  fi
+fi
+
 if [ "${RESTORE_DRY_RUN:-0}" = "1" ]; then
   log "DRY-RUN: wuerde '$file' via $MODE in '$TARGET_DB' einspielen (kein DB-Zugriff)."
   exit 0
 fi
 
 # --- 4. Helfer fuer DB-Zugriff ----------------------------------------------
-# psql_maint <sql>: SQL gegen die Maintenance-DB (Existenz/DROP).
+# psql_maint <sql>: SQL gegen die Maintenance-DB (Existenz/DROP/CREATE).
 psql_maint() {
   local sql="$1"
   if [ "$MODE" = "local" ]; then
-    if [ -n "${DATABASE_URL:-}" ]; then psql "$DATABASE_URL" -tAc "$sql"; else psql -d "$MAINT_DB" -tAc "$sql"; fi
+    if [ -n "${DATABASE_URL:-}" ]; then psql "$(url_set_db "$DATABASE_URL" "$MAINT_DB")" -tAc "$sql"
+    else psql -d "$MAINT_DB" -tAc "$sql"; fi
   else
     docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d "$MAINT_DB" -tAc "$sql"
   fi
 }
-# psql_target <sql|->: SQL gegen die Zieldatenbank.
+# psql_target <args>: SQL gegen die Zieldatenbank. TARGET_DB ist massgeblich;
+# im DATABASE_URL-Modus wird der DB-Name im URL-Pfad durch TARGET_DB ersetzt.
 psql_target() {
   if [ "$MODE" = "local" ]; then
-    if [ -n "${DATABASE_URL:-}" ]; then psql "$DATABASE_URL" "$@"; else psql -d "$TARGET_DB" "$@"; fi
+    if [ -n "${DATABASE_URL:-}" ]; then psql "$(url_set_db "$DATABASE_URL" "$TARGET_DB")" "$@"
+    else psql -d "$TARGET_DB" "$@"; fi
   else
     docker compose -f "$COMPOSE_FILE" exec -T db psql -U "$POSTGRES_USER" -d "$TARGET_DB" "$@"
   fi
@@ -133,6 +172,33 @@ psql_target() {
 # stream_into_target: SQL-Strom von stdin in die Zieldatenbank.
 stream_into_target() {
   psql_target -v ON_ERROR_STOP=1 -q -X
+}
+# drop_target / create_target: nutzen IMMER eine Maintenance-DB (!= TARGET_DB),
+# damit ein Restore in die DB "postgres" nicht gegen die eigene Session laeuft.
+# Im DATABASE_URL-Modus laeuft beides ebenfalls ueber die (umgeschriebene) URL,
+# nicht ueber die libpq-Env — sonst wuerde createdb nach dem DROP ins Leere
+# greifen und die Live-DB waere verloren.
+drop_target() {
+  if [ "$MODE" = "local" ]; then
+    if [ -n "${DATABASE_URL:-}" ]; then
+      psql "$(url_set_db "$DATABASE_URL" "$MAINT_DB")" -tAc "drop database if exists \"$TARGET_DB\"" >/dev/null
+    else
+      dropdb --if-exists --maintenance-db "$MAINT_DB" "$TARGET_DB"
+    fi
+  else
+    docker compose -f "$COMPOSE_FILE" exec -T db dropdb -U "$POSTGRES_USER" --if-exists --maintenance-db "$MAINT_DB" "$TARGET_DB"
+  fi
+}
+create_target() {
+  if [ "$MODE" = "local" ]; then
+    if [ -n "${DATABASE_URL:-}" ]; then
+      psql "$(url_set_db "$DATABASE_URL" "$MAINT_DB")" -tAc "create database \"$TARGET_DB\"" >/dev/null
+    else
+      createdb --maintenance-db "$MAINT_DB" "$TARGET_DB"
+    fi
+  else
+    docker compose -f "$COMPOSE_FILE" exec -T db createdb -U "$POSTGRES_USER" --maintenance-db "$MAINT_DB" "$TARGET_DB"
+  fi
 }
 
 exists="$(psql_maint "select 1 from pg_database where datname = '$TARGET_DB'" | tr -d '[:space:]')"
@@ -147,30 +213,18 @@ if [ "$exists" = "1" ]; then
       exit 5
     fi
     log "Ziel '$TARGET_DB' wird verworfen (RESTORE_DROP_EXISTING=yes)."
-    if [ "$MODE" = "local" ]; then
-      if [ -n "${DATABASE_URL:-}" ]; then
-        psql "$(printf '%s' "$DATABASE_URL" | sed 's#/[^/]*$#/'"$MAINT_DB"'#')" -tAc "drop database if exists \"$TARGET_DB\"" >/dev/null
-      else
-        dropdb --if-exists --maintenance-db "$MAINT_DB" "$TARGET_DB"
-      fi
-      createdb --maintenance-db "$MAINT_DB" "$TARGET_DB"
-    else
-      docker compose -f "$COMPOSE_FILE" exec -T db dropdb -U "$POSTGRES_USER" --if-exists --maintenance-db "$MAINT_DB" "$TARGET_DB"
-      docker compose -f "$COMPOSE_FILE" exec -T db createdb -U "$POSTGRES_USER" --maintenance-db "$MAINT_DB" "$TARGET_DB"
+    if ! { drop_target && create_target; }; then
+      log "FEHLER: Ziel '$TARGET_DB' konnte nicht verworfen/neu angelegt werden."
+      exit 6
     fi
   else
     log "Ziel '$TARGET_DB' existiert und ist leer — Restore ohne Verwerfen."
   fi
 else
   log "Ziel '$TARGET_DB' existiert nicht — wird angelegt."
-  if [ "$MODE" = "local" ]; then
-    if [ -n "${DATABASE_URL:-}" ]; then
-      psql "$(printf '%s' "$DATABASE_URL" | sed 's#/[^/]*$#/'"$MAINT_DB"'#')" -tAc "create database \"$TARGET_DB\"" >/dev/null
-    else
-      createdb --maintenance-db "$MAINT_DB" "$TARGET_DB"
-    fi
-  else
-    docker compose -f "$COMPOSE_FILE" exec -T db createdb -U "$POSTGRES_USER" --maintenance-db "$MAINT_DB" "$TARGET_DB"
+  if ! create_target; then
+    log "FEHLER: Ziel '$TARGET_DB' konnte nicht angelegt werden."
+    exit 6
   fi
 fi
 

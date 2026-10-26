@@ -40,8 +40,8 @@ $ PG_BIN=.../postgresql-18.6.1-.../bin bash scripts/test-restore.sh --mode real
   PASS: Metadaten-Sidecar vorhanden
   PASS: restore.sh: in ez_restored eingespielt
   PASS: add_to_list_requests count=0 md5=empty
-  PASS: categories         count=13 md5=7aade0b5cc2e
-  PASS: category_rules     count=389 md5=bac52a87da11
+  PASS: categories         count=13 md5=560784a3e0b3
+  PASS: category_rules     count=389 md5=e6a8c018475b
   PASS: household_members  count=0 md5=empty
   PASS: households         count=0 md5=empty
   PASS: invites            count=0 md5=empty
@@ -55,10 +55,15 @@ $ PG_BIN=.../postgresql-18.6.1-.../bin bash scripts/test-restore.sh --mode real
   PASS: Regression: Restore nach 'postgres' (leer, ohne Drop) erfolgreich
   PASS: Regression: TARGET_DB=postgres mit Drop/Create ueber Maintenance-DB erfolgreich
   PASS: Regression: 'postgres' enthaelt nach Restore 11 public-Tabellen
+  PASS: DATABASE_URL: Restore nach TARGET_DB != URL-Pfad erfolgreich
+  PASS: DATABASE_URL: Zieldaten in TARGET_DB 'ez_url_target' (11 Tabellen)
+  PASS: DATABASE_URL: URL-Pfad-DB 'ez_urlpath' blieb unberuehrt (0 Tabellen)
+  PASS: DATABASE_URL: DR-Pfad (Ziel=URL-Pfad, nicht leer, DROP_EXISTING) exit 0
+  PASS: DATABASE_URL: DR-Ziel 'ez_url_dr' enthaelt nach Restore 11 Tabellen (Live-DB erhalten)
   PASS: Retention: Archiv aelter als 14 Tage geloescht
   PASS: Retention: aktuelles Archiv erhalten
 
-==== ERGEBNIS: 32 bestanden, 0 fehlgeschlagen (Modus real) ====
+==== ERGEBNIS: 37 bestanden, 0 fehlgeschlagen (Modus real) ====
 EXIT=0
 ```
 
@@ -85,7 +90,7 @@ EXIT=0
 
 **Befund:** Der DR-Pfad in `OPERATIONS.md` §5.2 verlangt `TARGET_DB=postgres`
 (Compose-Default `POSTGRES_DB`). `dropdb`/`createdb` verbanden sich dabei
-implizit mit `postgres` selbst → ``cannot drop the currently open database``,
+implizit mit `postgres` selbst → `cannot drop the currently open database`,
 das folgende `createdb` scheiterte an „already exists".
 
 **Fix:** `restore.sh` nutzt für Verwerfen/Anlegen eine **separate Maintenance-DB**
@@ -122,6 +127,49 @@ Archiv: einkaufszettel-20261026T132048Z.sql.gz
 
 Im `--mode real`-Lauf oben erzwingt die zweite Regression den Drop/Create-Pfad
 (nicht-leeres `postgres`) und belegt 11 wiederhergestellte public-Tabellen.
+
+## 2c. Fix Review-Runde 2 — `DATABASE_URL`-Modus (`restore.sh`)
+
+**Befunde (vom Reviewer reproduziert):**
+
+1. Im Drop-Pfad stand `createdb` **außerhalb** des `DATABASE_URL`-Zweigs und lief
+   über die libpq-Umgebungsvariablen. War die URL die **einzige** Verbindungsangabe
+   (Ziel = URL-Pfad, nicht leer, `RESTORE_DROP_EXISTING=yes` — der §5.2-DR-Pfad),
+   wurde das Ziel **erst gedroppt** und `createdb` scheiterte danach → Live-DB weg,
+   `exit 1` (undokumentiert).
+2. `psql_target` benutzte die **unveränderte** `DATABASE_URL` und ignorierte
+   `TARGET_DB`: Bei abweichendem URL-Pfad wurde still in die URL-Datenbank
+   geschrieben, während Log/Exit-Code Erfolg für `TARGET_DB` meldeten.
+
+**Fix:** `DATABASE_URL` liefert nur noch **Host/Port/User**. Für Ziel-Operationen
+wird der DB-Name im URL-Pfad durch `TARGET_DB` (bzw. `MAINT_DB` für Drop/Create)
+ersetzt (`url_set_db`); ein abweichender URL-Pfad wird geloggt. Drop/Create laufen
+im URL-Modus über (umgeschriebene) `psql`-Aufrufe gegen die Maintenance-URL — nie
+über die Env. Vorbereitungsfehler enden jetzt mit Exit `6`.
+
+**Vorher/Nachher am echten Skript (portables PostgreSQL 18.6.1, je temporäres
+Cluster, `env -u PGHOST -u PGPORT -u PGUSER` → URL ist einzige Verbindungsangabe):**
+
+```text
+=== Blocker 1: Ziel = URL-Pfad, nicht leer, DROP_EXISTING=yes ===
+VORHER : exit=1   — createdb: error: connection to server on socket "/tmp/.s.PGSQL.5432" failed
+         nachher: ez_live existiert=0   (Live-DB ist weg)
+NACHHER: exit=0
+         [restore] Ziel 'ez_live' wird verworfen (RESTORE_DROP_EXISTING=yes).
+         [restore] Restore abgeschlossen: 'ez_live' (1 Tabellen in public).
+         nachher: ez_live existiert=1   (Live-DB erhalten)
+
+=== Blocker 2: URL-Pfad (postgres) != TARGET_DB (ez_target) ===
+VORHER : exit=0 (falsch zufriedenstellend)
+         ez_target public-Tabellen: 0     (Ziel leer)
+         postgres  public-Tabellen: 1     (stiller Falschziel-Restore)
+NACHHER: exit=0
+         ez_target public-Tabellen: 1     (Daten im Ziel)
+         postgres  public-Tabellen: 0     (URL-Pfad unberuehrt)
+```
+
+Beide Fälle sind jetzt als Regression in `test-restore.sh --mode real` verankert
+(siehe Abschnitt 2, 5 neue PASS-Zeilen).
 
 ---
 
