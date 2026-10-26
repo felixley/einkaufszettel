@@ -40,6 +40,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # D23: `@einkaufszettel/core` wird im Web-Workspace NICHT auf die Quellen
+      # gemappt (kein tsconfig-path, `transpilePackages` transpiliert nur, es
+      # loest nicht auf). Next folgt `node_modules/@einkaufszettel/core` ->
+      # `packages/core/package.json#exports` -> `dist/index.js`. Ohne diesen
+      # Build fehlt `dist/` im CI-Checkout, `next dev` liefert fuer `/` 500
+      # ("Module not found: Can't resolve '@einkaufszettel/core'") und
+      # Playwright laeuft in `Timed out waiting 180000ms from config.webServer.`
+      # (0 Tests ausgefuehrt). `ci.yml` baut den Core implizit ueber
+      # `pnpm typecheck` mit; hier wird der Schritt explizit nachgeholt.
+      - name: Build core (workspace dependency of the web app)
+        run: pnpm --filter @einkaufszettel/core build
+
       # T5.1: beide Engines installieren — Chromium (Desktop + Pixel 7) und
       # WebKit (Desktop Safari + iPhone 14). `--with-deps` zieht die noetigen
       # Systembibliotheken auf dem Ubuntu-Runner nach.

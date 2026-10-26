@@ -446,3 +446,30 @@ projektweiter Umbau und nicht Teil von T4.3.
   `chromium`+`mobile-chromium` 68/68). Alle Docker-/Host-Nachweise (T1.3,
   D14, WebKit-Lauf, Restore gegen den Compose-Stack) bleiben offen und sind in
   `DEPLOY.md` §7 als Erststart-Checkliste geführt.
+
+## 2026-10-26 — D23: Core-Build als eigener Schritt in `e2e.yml` (nicht Produktions-Build im webServer)
+
+- **Entscheidung:** `.github/workflows/e2e.yml` bekommt vor „Run E2E tests“ den
+  Schritt `pnpm --filter @einkaufszettel/core build`. `pnpm test:e2e`, die vier
+  Playwright-Projekte und `webServer.command: pnpm dev` in
+  `apps/web/playwright.config.ts` bleiben unverändert.
+- **Begründung:** Damit ist der CI-Job auf derselben Kette wie `ci.yml`
+  (`pnpm typecheck` baut den Core dort implizit mit). Der Fehler war rein
+  fehlende Vorbereitung, kein Test- oder Anwendungsfehler: ohne `dist/` liefert
+  `next dev` für `/` 500 (`Module not found: Can't resolve
+'@einkaufszettel/core'`), Playwright wartet 180 s auf eine 2xx-Antwort und
+  bricht mit `Timed out waiting 180000ms from config.webServer.` ab, ohne einen
+  einzigen Test auszuführen. Der Schritt kostet ~5 s und lässt die getestete
+  Laufzeitumgebung (Dev-Server) unangetastet.
+- **Alternative:** `webServer.command` auf `pnpm build && pnpm start` umstellen
+  (Produktions-Build in CI und lokal). Verworfen: `NEXT_PUBLIC_*`-Werte aus
+  `webServer.env` (Auth-Mock, PWA-Aus, leere Supabase-URL) wirkt für den
+  Dev-Server zur Laufzeit, wird von `next build` aber zur Build-Zeit inlined —
+  ein Produktions-Build würde die Suite also mit anderen Flags fahren und die
+  gesamte T5.1-Abnahme (68/68 gegen den Dev-Server) entwertet. Zusätzlich wäre
+  `output: 'standalone'` + `pnpm start` ein zweiter, ungeprüfter Startpfad.
+- **Risiko/Status:** Lokal reproduziert und behoben (Port 3313, identische
+  `webServer`-Kette: ohne `dist/` → `GET /` 500 und Serverlog
+  `Module not found`, mit `dist/` → `GET /` 200). Der belastbare Nachweis ist
+  der grüne CI-Lauf auf `master` (`docs/REVIEW.md` D23); WebKit-Syslibs auf dem
+  Runner sind ein separater, im Lauf beobachteter Punkt.
