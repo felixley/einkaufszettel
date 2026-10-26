@@ -817,3 +817,106 @@ Status nach Behebung der E2E-Befunde. Alle Läufe in dieser Sandbox, Mock-Modus 
 **Bestanden.** Alle prüfbaren AKs B-1…B-6 sind mit echtem Tool-Output belegt; die vier Karten erfüllen ihre Spezifikation, die E2E-Suite ist mit 32/32 grün (inkl. Doppelübertragung, inkompatibler Einheit, Offline-Reconnect und `source_recipe_id`). Die Befunde D9–D14 sind niedrigschwellig bzw. Informations-/Umgebungspunkte und blockieren die Abnahme nicht. Die Zurückstellung von T3.5 ist regelkonform.
 
 **Offene Punkte (nicht Welle-3-blockierend):** D14 Real-Backend-E2E; T1.3 (Compose/HTTPS-Laufzeitnachweis) aus Welle 1 bleibt auf einem Docker-Host nachzuholen.
+
+---
+
+## 11. QA-Abnahme Welle 4 (T4.1–T4.6, Anhang C)
+
+### 11.1 Prüfumfang und Umgebung
+
+Geprüft wurden die sieben Welle-4-Karten aus Anhang C.2 gegen die prüfbaren AKs
+**C-1…C-8** (Anhang C.3) und §5 Phase 4. Die vier vom Orchestrator nachgereichten
+Karten (T4.3b `t_e8af35e9`, T4.4/4.5 `t_d230d8e6`, T4.6 `t_e07f902e`, T4.2b
+`t_18741bd9`) waren beim Start nicht verlinkt und wurden in diese Abnahme
+einbezogen. Maßgeblich waren die Karten-Spezifikationen in den Kommentaren, die
+Testlogs unter `docs/TESTLOG-T4.*.md` sowie eigene Stichproben.
+
+- **Prüfstand:** `master` bei `03d914c` (T4.1 `68fdcd5`, T4.2a `8222f6b`,
+  T4.2b `03d914c`, T4.3a `4ce51dd`, T4.4/4.5 `365e1c6`+`5f6e820`, T4.6 `b4fe391`).
+  Der Arbeitsstand von T4.3b lag zunächst **uncommittet** im Baum; QA hat ihn
+  geprüft und als `4cdd631` committet (Befund D15). Alle Läufe unten beziehen
+  sich auf genau diesen Stand (Arbeitsbaum inkl. T4.3b) und sind damit
+  reproduzierbar.
+- **Umgebung:** Node 26.7.0, pnpm 9.15.4 (Shim via `npx`), Next.js 16.4.3,
+  Playwright 1.64.1, Chromium + Mobile-Chromium (Pixel 7), Vitest 3.2.7.
+- **Grenzen:** Kein Docker-Daemon, daher kein echter PostgREST/Realtime-Lauf;
+  Mock-Sync ersetzt ihn (Anhang C.4/C.5, D14). Offline wird per
+  `context.setOffline(true)` emuliert. Beides ist dokumentiert und laut
+  Anhang C.5 **nicht blockierend**.
+
+### 11.2 Durchgeführte Tests mit echtem Output
+
+Eigene Stichproben (frisch in dieser Abnahme ausgeführt, voller Log-Auszug):
+
+| Prüfung             | Kommando                              | Ergebnis                                                                                          |
+| ------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Lint/Format         | `pnpm lint`                           | exit 0; „All matched files use Prettier code style!“                                              |
+| Typecheck           | `pnpm typecheck`                      | exit 0; packages/core + apps/web „Done“                                                           |
+| Unit-Tests          | `pnpm test`                           | **24 Dateien, 280/280 Tests grün** (8,2 s)                                                        |
+| Build               | `pnpm build`                          | exit 0; 14/14 statische Seiten                                                                    |
+| E2E gesamt          | `pnpm test:e2e`                       | **68/68 grün** (5,4 min; chromium + mobile-chromium)                                              |
+| Lighthouse PWA      | Report `lh-pwa-final.json`            | PWA-Kategorie **Score 1**, keine fehlgeschlagenen PWA-Audits                                      |
+| Backoff-Tests       | `packages/core/src/outbox.test.ts`    | **14 `it`-Blöcke** im `describe('Backoff-Policy (T4.3a)')`                                        |
+| Dead-Letter-E2E     | in Gesamtsuite                        | 4/4 (2 Tests × 2 Projekte), inkl. Fehlertext „Injected failure“, Retry, Verwerfen, leerer Zustand |
+| Offline-E2E         | in Gesamtsuite                        | 4/4 (2 Szenarien × 2 Projekte); laut `TESTLOG-T4.2.md` zusätzlich 2× hintereinander 4/4           |
+| PWA-E2E             | in Gesamtsuite                        | 6/6 (Manifest, Link, SW-Controller, keine Konsolenfehler)                                         |
+| a11y-E2E            | in Gesamtsuite                        | 12/12, **0 serious/critical**, 0 Verstöße auf Login/Liste/Rezepte/Haushalt                        |
+| UI-Polish-E2E       | in Gesamtsuite                        | 10/10 (Dark-Toggle/Persistenz/System, 320 px, Touch ≥44 px, ≤2 Taps, Swipe, reduced motion)       |
+| Supabase-Änderungen | `git diff 03d914c..HEAD -- supabase/` | leer (keine Produktiv-Änderung)                                                                   |
+| Secrets             | Diff-Grep (ohne docs/md)              | nur Test-Konstante `PASSWORD = 'geheim1234'`; keine Secrets                                       |
+
+Zusätzlich verifiziert: `replayOutbox` quittiert erfolgreiche Einträge über
+`acknowledge` und entfernt sie aus dem zurückgegebenen Outbox-Stand; der neue
+`bulkPut` in `saveReplayResult` schreibt daher nur verbleibende Fehler-/Retry-
+Zeilen und lässt bereits angewendete Einträge nicht wieder auferstehen.
+`syncNow({ dueOnly: true })` filtert nach `next_attempt_at`; der manuelle
+Trigger umgeht den Filter bewusst. Beide Pfade sind durch die neuen Worker-Tests
+abgedeckt.
+
+### 11.3 Urteil je Kriterium (Anhang C)
+
+| #   | Kriterium                         | Urteil        | Begründung / Nachweis                                                                                                                                                                                                                                                                                                                 |
+| --- | --------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C-1 | PWA-Grundlage (T4.1)              | **bestanden** | Manifest 200 mit Pflichtfeldern, SW kontrolliert Seite, App-Shell offline, `/rest/v1/*`/`/auth/v1/*`/`/api/*` network-only, Install-Prompt; Lighthouse 11.7.1 PWA-Score 1, keine fehlgeschlagenen Audits; `e2e/pwa.spec.ts` 6/6.                                                                                                      |
+| C-2 | Mock-Sync/Realtime (T4.2a)        | **bestanden** | 7 Integrationstests gegen denselben Server-Handler: Konvergenz zweier Clients in **24 ms**, Upsert idempotent, `add_to_list` mit gleicher `request_id` ohne Doppelmenge, Aggregation, Soft-Delete, Cursor; Supabase-Pfad unverändert.                                                                                                 |
+| C-3 | Offline-E2E (T4.2b)               | **bestanden** | Szenario A (offline CRUD, Offline-Reload App-Shell, Dexie-Daten, Reconnect → pending 0, Serverzeilen inkl. Tombstone) und B (zwei Kontexte offline/online, beide sehen beide Änderungen, keine Duplikate) je 2× hintereinander grün; Gesamtsuite 68/68. Abweichungen D16/D17 dokumentiert und für den geprüften Sync-Pfad unkritisch. |
+| C-4 | Backoff-Policy (T4.3a)            | **bestanden** | `nextRetryDelayMs` 1/2/4/8/16 s, Cap 60 s, Jitter ±20 % deterministisch; `next_attempt_at` gesetzt; Dead-Letter nach 5 Versuchen; **14 Unit-Tests** im Backoff-Block, Core-Suite grün; Commit `4ce51dd`.                                                                                                                              |
+| C-5 | Sync-Fehler + Dead-Letter (T4.3b) | **bestanden** | Automatischer 30-s-Lauf überspringt Einträge bis `next_attempt_at`, manueller Trigger/Reconnect versucht sofort (Worker-Tests); Panel listet Fehlertext/Versuche, Aktionen „Erneut versuchen“/„Verwerfen“, Statusaktualisierung, leerer Zustand; Playwright 4/4.                                                                      |
+| C-6 | UI-Polish + Mobile (T4.4/4.5)     | **bestanden** | Dark Mode Hell/Dunkel/System persistiert, Pre-Paint-Script gegen Flash, System folgt `prefers-color-scheme`; kein H-Scroll bei 320 px; Safe-Area; Empty States + Skeletons; `prefers-reduced-motion`; Touch ≥44 px; Eingabe unten; Enter bleibt im Feld; Autovervollständigung; Swipe; ≤2 Taps. `ui-polish.spec.ts` 10/10.            |
+| C-7 | Barrierefreiheit (T4.6)           | **bestanden** | axe 12/12 mit 0 serious/critical auf Login/Registrierung/Liste/Rezepte/Haushalt; Kontrast 4,32:1 → 4,9:1; sichtbare Fokusringe; Labels; `role="combobox"` statt `aria-expanded` auf Textbox; `aria-live` für Sync-Status/Fehler.                                                                                                      |
+| C-8 | Querschnitt (alle Karten)         | **bestanden** | `lint`, `typecheck`, `test` (280), `build` grün; E2E-Suite 68/68 ohne Regression; keine Secrets; keine Änderung an `supabase/`; PLAN-Checkboxen T4.1–T4.6 mit dieser Abnahme vollständig getickt. Real-Backend-Grenze D14 bleibt dokumentiert.                                                                                        |
+
+### 11.4 Urteil je Karte
+
+| Karte        | Inhalt                                | Urteil        | Begründung                                                                                                                                                        |
+| ------------ | ------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `t_4e27c239` | T4.1 PWA-Grundlage                    | **bestanden** | PWA-Spec 6/6, Lighthouse-Score 1, SW-/Cache-Strategie-Unit-Tests 6/6; Build 14/14.                                                                                |
+| `t_bba90d6d` | T4.2a Mock-Sync/Realtime              | **bestanden** | 7 Integrationstests, Konvergenz 24 ms, Idempotenz/Aggregation/Soft-Delete/Cursor; Supabase-Adapter unverändert.                                                   |
+| `t_18741bd9` | T4.2b Offline-E2E                     | **bestanden** | Beide Szenarien in beiden Projekten 2× grün; 68/68 Gesamtsuite; zwei Abweichungen dokumentiert und vertretbar.                                                    |
+| `t_28db1c12` | T4.3a Backoff-Policy                  | **bestanden** | Exponentielle Sequenz, Jitter, Cap, `next_attempt_at`, Dead-Letter nach 5 Versuchen; 14 Tests; Commit `4ce51dd`.                                                  |
+| `t_e8af35e9` | T4.3b Worker-Backoff + Dead-Letter-UI | **bestanden** | Worker respektiert Backoff, manueller Trigger sofort; Panel mit Retry/Verwerfen/Status/Empty State; Unit- und E2E-Nachweis; Arbeitsstand als `4cdd631` committet. |
+| `t_d230d8e6` | T4.4/T4.5 UI-Polish + Mobile          | **bestanden** | Dark Mode/System/Persistenz, Responsive 320 px, Empty/Skeletons, Touch ≥44 px, Safe-Area, Enter-Fokus, Autovervollständigung, Swipe, ≤2 Taps; 10/10 E2E.          |
+| `t_e07f902e` | T4.6 A11y/axe                         | **bestanden** | axe 12/12, 0 serious/critical; Kontrast-/ARIA-Fixes; `aria-live`; in CI-Suite integriert.                                                                         |
+
+### 11.5 Befunde / Defekte (D-Serie fortgesetzt)
+
+- **D15 — [mittel] T4.3b lag uncommittet im Arbeitsbaum, PLAN-Checkbox T4.3 offen. — BEHOBEN (`4cdd631` + dieser Abnahme-Commit).** Die Karte `t_e8af35e9` war „done“, ihr Code lag aber nur als Working-Tree-Änderung vor; damit waren weder CI-Reproduzierbarkeit noch C-8 („Checkboxen durch die umsetzenden Karten getickt“) erfüllt. QA hat den geprüften Stand committet, `docs/TESTLOG-T4.3.md` um die QA-Stichprobe ergänzt und die Checkbox T4.3 nachgezogen. Kein Code-Defekt.
+- **D16 — [Info/Produktentscheidung] T4.2b Szenario B nutzt zwei Kontexte desselben Nutzers statt einer Zwei-Nutzer-Einladung.** Begründung im Testlog: Der Mock-Sync-Scope ist `readCachedHouseholdId() ?? user.id`; zwei eingeladene Nutzer hätten ohne gecachte Haushalts-ID zwei Scopes erzeugt. Geprüft wurde damit der reale Offline-/Konvergenzpfad zweier Geräte mit getrennter IndexedDB. Ein Zwei-Nutzer-Haushalts-E2E bleibt als Produktentscheidung offen (nicht Welle-4-blockierend).
+- **D17 — [Info/Testabgrenzung] T4.2b Szenario A legt keinen Haushalt an und nutzt `default-list-id`.** Dokumentiert im Testlog; der Haushaltsbezug ist für Rezepte relevant, nicht für die Offline-Liste. Der geprüfte Sync-/Offline-Pfad bleibt identisch.
+- **D18 — [Info/Dokumentation] Pushstatus im T4.2a-Handoff veraltet.** Der Handoff nennt „kein Push (wartet auf Freigabe)“; `8222f6b` ist nachweislich Vorfahre von `origin/master` (`03d914c`) und damit gepusht. Reine Dokumentationslücke, analog D13.
+- **D19 — [niedrig/Info] axe deckt den Dead-Letter-Dialog nicht separat ab.** `TESTLOG-T4.6.md` weist das offen aus; der Dialog wird in `dead-letter.spec.ts` funktional über Rolle „dialog“, Fokus und Aktionen geprüft. Keine serious/critical-Befunde bekannt; eine axe-Erweiterung wäre eine sinnvolle Folge-Maßnahme, kein Abnahmeblocker.
+- **D20 — [Info/Arbeitsbaum] `apps/web/app/favicon.ico` (353 Byte) blieb untracked.** Herkunft unklar (vermutlich Entwicklungsartefakt), nicht Teil der AKs und nicht mitcommittet. Kein funktionaler Einfluss; bei Bedarf als eigenes Asset aufnehmen oder entfernen.
+
+### 11.6 Gesamturteil Welle 4
+
+**Bestanden.** Alle prüfbaren AKs C-1…C-8 sind mit echtem Tool-Output belegt. Die
+sieben Karten erfüllen ihre Spezifikation; die vollständige E2E-Suite ist mit
+**68/68** grün (inkl. PWA 6/6, a11y 12/12, Dead-Letter 4/4, Offline 4/4,
+UI-Polish 10/10), Lighthouse meldet PWA-Score 1, und die Backoff-Policy ist mit
+14 Unit-Tests abgedeckt. Der zunächst uncommittete T4.3b-Stand ist als
+`4cdd631` übernommen und die Checkbox T4.3 nachgezogen (D15 behoben).
+
+**Offene Punkte (nicht Welle-4-blockierend):** D14 Real-Backend-E2E
+(PostgREST/Realtime) auf einem Docker-Host; D16 Zwei-Nutzer-Haushalts-E2E;
+T1.3 (Compose/HTTPS-Laufzeitnachweis) aus Welle 1; D19 axe-Abdeckung des
+Dead-Letter-Dialogs als optionale Folge-Maßnahme.
