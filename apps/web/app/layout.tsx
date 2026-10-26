@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import type { Viewport } from 'next';
 import { AuthProvider } from '@/context/AuthContext';
 import { SyncProvider } from '@/lib/sync/SyncProvider';
+import { ThemeProvider } from '@/components/theme/ThemeProvider';
+import { ThemeScript } from '@/components/theme/ThemeScript';
 import { PwaRegister } from '@/components/pwa/PwaRegister';
 import { InstallPrompt } from '@/components/pwa/InstallPrompt';
 import './globals.css';
@@ -18,13 +20,17 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="de">
+    // data-theme setzt das Inline-Script vor dem ersten Paint (T4.4).
+    <html lang="de" suppressHydrationWarning>
       <body>
+        <ThemeScript />
         <PwaRegister />
         <InstallPrompt />
-        <AuthProvider>
-          <SyncProvider>{children}</SyncProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <SyncProvider>{children}</SyncProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

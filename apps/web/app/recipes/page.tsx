@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { SyncStatusBadge } from '@/components/SyncStatusBadge';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { RecipeCard } from '@/components/recipes/RecipeCard';
 import { useAuth } from '@/context/AuthContext';
 import { getDb } from '@/lib/db/database';
@@ -100,8 +101,19 @@ export default function RecipesPage() {
 
   if (loading) {
     return (
-      <main className={styles.container}>
-        <p className={styles.centered}>Lade Sitzung …</p>
+      <main className={styles.container} aria-busy="true" aria-label="Rezepte werden geladen">
+        <div className={styles.header}>
+          <div className="skeleton" style={{ height: '1.15rem', width: '35%' }} />
+          <div className="skeleton" style={{ height: '2.75rem', width: '40%' }} />
+        </div>
+        <div className={styles.searchWrap}>
+          <div className="skeleton" style={{ height: '2.75rem' }} />
+        </div>
+        <div className={styles.list}>
+          {[0, 1, 2].map((index) => (
+            <div key={index} className="skeleton skeleton-card" />
+          ))}
+        </div>
       </main>
     );
   }
@@ -120,6 +132,7 @@ export default function RecipesPage() {
         <h1>Rezepte</h1>
         <div className={styles.headerActions}>
           <SyncStatusBadge />
+          <ThemeToggle />
           <Link href="/lists" className={styles.headerLink}>
             Liste
           </Link>
@@ -170,11 +183,27 @@ export default function RecipesPage() {
         ))}
 
         {filtered.length === 0 ? (
-          <p className={styles.emptyState} data-testid="recipe-empty">
-            {entries.length === 0
-              ? 'Noch keine Rezepte. Lege dein erstes Rezept an.'
-              : 'Keine Rezepte gefunden.'}
-          </p>
+          <div className={styles.emptyState} data-testid="recipe-empty">
+            <p className={styles.emptyTitle}>
+              {entries.length === 0 ? 'Noch keine Rezepte' : 'Keine Rezepte gefunden'}
+            </p>
+            <p className={styles.emptyText}>
+              {entries.length === 0
+                ? 'Lege dein erstes Rezept an – Zutaten lassen sich direkt auf die Einkaufsliste übertragen.'
+                : `Für „${query.trim()}“ wurde nichts gefunden.`}
+            </p>
+            {entries.length === 0 ? (
+              canWrite && householdId !== null ? (
+                <Link href="/recipes/new" className={styles.emptyAction}>
+                  Erstes Rezept anlegen
+                </Link>
+              ) : null
+            ) : (
+              <button type="button" className={styles.emptyAction} onClick={() => setQuery('')}>
+                Suche zurücksetzen
+              </button>
+            )}
+          </div>
         ) : null}
       </div>
 

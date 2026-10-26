@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SyncStatusBadge } from '@/components/SyncStatusBadge';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { useItemHistory, type ItemHistoryEntry } from '@/components/list/useItemHistory';
 import { useAuth } from '@/context/AuthContext';
 import { useActiveListItems } from '@/lib/db/hooks';
 import { getDb } from '@/lib/db/database';
@@ -37,10 +39,32 @@ const UNITS = [
   'n. B.',
 ] as const;
 
+/** Lade-Skelett für die Kopfzeile/Liste (T4.4). */
+function LoadingSkeleton() {
+  return (
+    <main className={styles.container} aria-busy="true" aria-label="Liste wird geladen">
+      <div className={styles.header}>
+        <div className="skeleton" style={{ height: '1.15rem', width: '45%' }} />
+        <div className="skeleton" style={{ height: '2.75rem', width: '30%' }} />
+      </div>
+      <div className={styles.list}>
+        <div className="skeleton skeleton-heading" />
+        {[0, 1, 2, 3].map((index) => (
+          <div key={index} className="skeleton skeleton-row" />
+        ))}
+      </div>
+    </main>
+  );
+}
+
 export default function ListsPage() {
   const { user, loading, signOut } = useAuth();
   const router = useRouter();
   const items = useActiveListItems();
+  const history = useItemHistory();
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const blurTimerRef = useRef<number | null>(null);
+
   const [newItemName, setNewItemName] = useState('');
   const [newItemQuantity, setNewItemQuantity] = useState('');
   const [newItemUnit, setNewItemUnit] = useState('');
@@ -49,6 +73,8 @@ export default function ListsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pending, setPending] = useState(false);
   const [householdId, setHouseholdId] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -73,6 +99,24 @@ export default function ListsPage() {
     };
   }, [user]);
 
+  useEffect(() => {
+    return () => {
+      if (blurTimerRef.current !== null) window.clearTimeout(blurTimerRef.current);
+    };
+  }, []);
+
+  const suggestions = useMemo<ItemHistoryEntry[]>(() => {
+    const query = newItemName.trim().toLowerCase();
+    if (query.length === 0) return [];
+    const prefix: ItemHistoryEntry[] = [];
+    const contains: ItemHistoryEntry[] = [];
+    for (const entry of history) {
+      if (entry.key.startsWith(query)) prefix.push(entry);
+      else if (entry.key.includes(query)) contains.push(entry);
+    }
+    return [...prefix, ...contains].slice(0, 5);
+  }, [history, newItemName]);
+
   async function handleLogout() {
     setPending(true);
     try {
@@ -89,6 +133,8 @@ export default function ListsPage() {
     if (!newItemName.trim() || isSubmitting) return;
     setIsSubmitting(true);
     setAddHint(null);
+    setShowSuggestions(false);
+    setActiveSuggestion(-1);
     try {
       const db = getDb();
       const now = new Date().toISOString();
@@ -111,8 +157,47 @@ export default function ListsPage() {
       setNewItemName('');
       setNewItemQuantity('');
       setNewItemUnit('');
+      // Enter/Submit bleibt im Feld (T4.5) – direkt weiter tippen.
+      nameInputRef.current?.focus();
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  function selectSuggestion(entry: ItemHistoryEntry) {
+    setNewItemName(entry.name);
+    setNewItemQuantity(entry.quantity !== null ? String(entry.quantity) : '');
+    setNewItemUnit(entry.unit ?? '');
+    setShowSuggestions(false);
+    setActiveSuggestion(-1);
+    nameInputRef.current?.focus();
+  }
+
+  function handleNameKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Escape') {
+      setShowSuggestions(false);
+      setActiveSuggestion(-1);
+      return;
+    }
+    if (suggestions.length === 0) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setShowSuggestions(true);
+      setActiveSuggestion((current) => (current + 1) % suggestions.length);
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setShowSuggestions(true);
+      setActiveSuggestion((current) =>
+        current <= 0 ? suggestions.length - 1 : current - 1,
+      );
+      return;
+    }
+    if (event.key === 'Enter' && showSuggestions && activeSuggestion >= 0) {
+      event.preventDefault();
+      const entry = suggestions[activeSuggestion];
+      if (entry) selectSuggestion(entry);
     }
   }
 
@@ -150,11 +235,7 @@ export default function ListsPage() {
   }
 
   if (loading) {
-    return (
-      <main className={styles.container}>
-        <p className={styles.centered}>Lade Sitzung …</p>
-      </main>
-    );
+    return <LoadingSkeleton />;
   }
 
   if (!user) {
@@ -190,6 +271,7 @@ export default function ListsPage() {
         <h1>Einkaufsliste</h1>
         <div className={styles.headerActions}>
           <SyncStatusBadge />
+          <ThemeToggle />
           <Link href="/recipes" className={styles.headerLink}>
             Rezepte
           </Link>
@@ -237,7 +319,20 @@ export default function ListsPage() {
         )}
 
         {activeItems.length === 0 && completedItems.length === 0 && (
-          <p className={styles.emptyState}>Noch keine Artikel. Füge unten den ersten hinzu.</p>
+          <div className={styles.emptyState} data-testid="list-empty">
+            <p className={styles.emptyTitle}>Deine Einkaufsliste ist leer</p>
+            <p className={styles.emptyText}>
+              Tippe unten einen Artikel ein – Vorschläge aus deiner Historie erscheinen
+              automatisch.
+            </p>
+            <button
+              type="button"
+              className={styles.emptyAction}
+              onClick={() => nameInputRef.current?.focus()}
+            >
+              Ersten Artikel eintragen
+            </button>
+          </div>
         )}
       </div>
 
@@ -257,13 +352,58 @@ export default function ListsPage() {
       ) : null}
 
       <form onSubmit={handleAddItem} className={styles.addBar}>
+        {showSuggestions && suggestions.length > 0 ? (
+          <div className={styles.suggestions} role="listbox" id="item-suggestions">
+            {suggestions.map((entry, index) => (
+              <button
+                key={entry.key}
+                type="button"
+                id={`item-suggestion-${index}`}
+                role="option"
+                aria-selected={index === activeSuggestion}
+                className={`${styles.suggestionItem} ${
+                  index === activeSuggestion ? styles.suggestionActive : ''
+                }`}
+                onPointerDown={(event) => event.preventDefault()}
+                onClick={() => selectSuggestion(entry)}
+              >
+                <span>{entry.name}</span>
+                <span className={styles.suggestionMeta}>
+                  {entry.quantity !== null ? `${entry.quantity} ${entry.unit ?? ''}`.trim() : ''}
+                  {entry.count > 1 ? ` · ${entry.count}×` : ''}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         <input
+          ref={nameInputRef}
           type="text"
           value={newItemName}
-          onChange={(event) => setNewItemName(event.target.value)}
+          onChange={(event) => {
+            setNewItemName(event.target.value);
+            setActiveSuggestion(-1);
+            setShowSuggestions(event.target.value.trim().length > 0);
+          }}
+          onFocus={() => {
+            if (newItemName.trim().length > 0) setShowSuggestions(true);
+          }}
+          onBlur={() => {
+            if (blurTimerRef.current !== null) window.clearTimeout(blurTimerRef.current);
+            blurTimerRef.current = window.setTimeout(() => setShowSuggestions(false), 150);
+          }}
+          onKeyDown={handleNameKeyDown}
           placeholder="Artikel hinzufügen …"
           className={styles.addInput}
           aria-label="Neuer Artikel"
+          aria-autocomplete="list"
+          aria-expanded={showSuggestions && suggestions.length > 0}
+          aria-controls="item-suggestions"
+          aria-activedescendant={
+            activeSuggestion >= 0 ? `item-suggestion-${activeSuggestion}` : undefined
+          }
+          enterKeyHint="send"
+          autoComplete="off"
         />
         <input
           type="number"

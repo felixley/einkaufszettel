@@ -1,5 +1,11 @@
+/*
+ * Theming (T4.4): CSS-Variablen bleiben die einzige Quelle der Farben.
+ * Das Theme wird als `data-theme="light|dark"` auf <html> gesetzt (Inline-
+ * Script vor dem ersten Paint, siehe components/theme/ThemeScript.tsx).
+ * Ohne JavaScript greift der Media-Fallback auf :root:not([data-theme]).
+ */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #f7f7f8;
   --fg: #16181d;
   --muted: #5b6270;
@@ -13,8 +19,25 @@
   --success-fg: #17663a;
 }
 
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #101216;
+  --fg: #eef1f5;
+  --muted: #9aa3b2;
+  --card: #171a20;
+  --border: #2b303a;
+  --primary: #4c8dff;
+  --primary-fg: #0b1020;
+  --danger-bg: #3a1a1a;
+  --danger-fg: #ffb4b4;
+  --success-bg: #12301f;
+  --success-fg: #9be7bd;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  /* Nur wenn (noch) kein explizites Theme gesetzt ist (JavaScript aus). */
+  :root:not([data-theme]) {
+    color-scheme: dark;
     --bg: #101216;
     --fg: #eef1f5;
     --muted: #9aa3b2;
@@ -274,4 +297,85 @@ a {
     color: #f2c14e;
     border-color: #f2c14e;
   }
+}
+
+:root[data-theme='dark'] .sync-status.tone-warning {
+  color: #f2c14e;
+  border-color: #f2c14e;
+}
+
+/* ------------------------------------------------------------------ */
+/* T4.4: Theme-Toggle, Skeletons, reduzierte Bewegung                   */
+/* ------------------------------------------------------------------ */
+
+/* Kompakter Toggle in Kopfzeilen; als Touch-Ziel 44 × 44 px. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.25rem;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  cursor: pointer;
+}
+
+.theme-toggle:active {
+  transform: translateY(1px);
+}
+
+.skeleton {
+  display: block;
+  background: linear-gradient(90deg, var(--border) 25%, var(--card) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  border-radius: 0.5rem;
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+.skeleton-row {
+  height: 56px;
+  margin-bottom: 0.25rem;
+}
+
+.skeleton-heading {
+  height: 0.8rem;
+  width: 40%;
+  margin: 0 0 0.75rem 0.25rem;
+}
+
+.skeleton-card {
+  height: 5.5rem;
+  margin-bottom: 0.75rem;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Bewegung respektieren (T4.4): Animationen/Transitions effektiv aus. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Kein horizontaler Scrollbalken bei 320 px (T4.4). */
+body {
+  overflow-x: hidden;
 }
