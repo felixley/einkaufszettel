@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Browser, BrowserContext, Page } from '@playwright/test';
+import { gotoHydrated } from './support/navigation';
 
 /**
  * A-2 (T2.2): Ein zweiter Nutzer (nicht Mitglied) sieht den Haushalt und die
@@ -23,11 +24,6 @@ function isMockMode(): boolean {
   if (process.env.NEXT_PUBLIC_AUTH_MOCK === 'true') return true;
   if (process.env.NEXT_PUBLIC_AUTH_MOCK === 'false') return false;
   return !process.env.NEXT_PUBLIC_SUPABASE_URL;
-}
-
-async function gotoHydrated(page: Page, path: string): Promise<void> {
-  await page.goto(path);
-  await page.waitForFunction(() => document.documentElement.dataset.authReady === 'true');
 }
 
 async function registerAndLogin(page: Page, email: string): Promise<void> {

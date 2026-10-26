@@ -1,15 +1,11 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { gotoHydrated, settlePage } from './support/navigation';
 
 const PASSWORD = 'geheim1234';
 
 function uniqueEmail(label: string): string {
   return `recipe-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-}
-
-async function gotoHydrated(page: Page, path: string): Promise<void> {
-  await page.goto(path);
-  await page.waitForFunction(() => document.documentElement.dataset.authReady === 'true');
 }
 
 async function registerAndLogin(page: Page, email: string): Promise<void> {
@@ -30,6 +26,9 @@ async function createHousehold(page: Page, name: string): Promise<void> {
   await page.getByLabel('Haushaltsname').fill(name);
   await page.getByTestId('create-household').click();
   await expect(page.getByTestId('household-title')).toHaveText(name);
+  // Die Seite feuert nach dem Anlegen `router.refresh()` (app/household/page.tsx).
+  // Erst wenn dieser RSC-Fetch durch ist, ist die Route wieder navigationsbereit (D24).
+  await settlePage(page);
 }
 
 async function openRecipes(page: Page): Promise<void> {

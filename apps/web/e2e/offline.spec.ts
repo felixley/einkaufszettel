@@ -1,5 +1,45 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { gotoHydrated } from './support/navigation';
+
+/** Wartezeit fuer einen einzelnen Kontrollnachweis (`navigator.serviceWorker.controller`). */
+const SW_CONTROL_TIMEOUT_MS = 8_000;
+
+/**
+ * Laedt die Seite neu, bis der Service Worker sie kontrolliert.
+ *
+ * `clients.claim()` laeuft im `activate`-Handler des Workers asynchron zur
+ * Seite. Faellt `page.reload()` in dieses Fenster, entsteht ein Dokument, das
+ * der `claim()`-Aufruf nicht mehr erreicht: es bleibt dauerhaft unkontrolliert
+ * (`navigator.serviceWorker.controller === null`), obwohl die Registrierung
+ * aktiv ist — der Offline-Reload waere dann kein SW-Nachweis, und der Test lief
+ * bisher in den 60-s-Timeout (beobachtet in vollen Chromium-Lane-Laeufen,
+ * nie in Einzellaeufen). Ein weiterer Reload landet garantiert kontrolliert,
+ * weil die Registrierung dann vollstaendig aktiv ist. Statt zu raten wird der
+ * Nachweis hier wiederholt und andernfalls mit klarer Meldung abgebrochen.
+ */
+async function reloadUnderServiceWorkerControl(page: Page): Promise<void> {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await page.reload();
+    const controlled = await page
+      .waitForFunction(() => Boolean(navigator.serviceWorker.controller), undefined, {
+        timeout: SW_CONTROL_TIMEOUT_MS,
+      })
+      .then(
+        () => true,
+        () => false,
+      );
+    if (controlled) {
+      if (attempt > 1) {
+        console.log('[sw] Seite erst nach %d Reloads vom Service Worker kontrolliert', attempt);
+      }
+      return;
+    }
+  }
+  throw new Error(
+    'Service Worker hat die Seite nach drei Reloads nicht kontrolliert (navigator.serviceWorker.controller bleibt null).',
+  );
+}
 
 /**
  * Szenario A (T4.2b) — „Supermarkt ohne Netz“.
@@ -18,11 +58,6 @@ const PASSWORD = 'geheim1234';
 
 function uniqueEmail(label: string): string {
   return `offline-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-}
-
-async function gotoHydrated(page: Page, path: string): Promise<void> {
-  await page.goto(path);
-  await page.waitForFunction(() => document.documentElement.dataset.authReady === 'true');
 }
 
 async function registerAndLogin(page: Page, email: string): Promise<void> {
@@ -128,8 +163,7 @@ test('Szenario A: Supermarkt ohne Netz — Offline-CRUD, Offline-Reload, Reconne
     const registration = await navigator.serviceWorker.getRegistration();
     return Boolean(registration?.active);
   });
-  await page.reload();
-  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+  await reloadUnderServiceWorkerControl(page);
   await page.waitForFunction(() => document.documentElement.dataset.authReady === 'true');
 
   await expect(page.getByTestId('sync-status')).toHaveAttribute('data-sync-state', 'synced');

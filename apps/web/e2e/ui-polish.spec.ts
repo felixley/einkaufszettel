@@ -1,16 +1,12 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { gotoHydrated } from './support/navigation';
 
 const PASSWORD = 'geheim1234';
 const THEME_KEY = 'einkaufszettel-theme';
 
 function uniqueEmail(label: string): string {
   return `ui-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
-}
-
-async function gotoHydrated(page: Page, path: string): Promise<void> {
-  await page.goto(path);
-  await page.waitForFunction(() => document.documentElement.dataset.authReady === 'true');
 }
 
 async function registerAndLogin(page: Page, email: string): Promise<void> {

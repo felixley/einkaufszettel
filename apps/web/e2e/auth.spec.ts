@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import { gotoHydrated } from './support/navigation';
 
 function uniqueEmail(): string {
   return `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
@@ -17,11 +17,6 @@ function isMockAuth(): boolean {
 }
 
 /** Navigiert und wartet, bis React hydratisiert ist (sonst nativer Form-Submit). */
-async function gotoHydrated(page: Page, path: string): Promise<void> {
-  await page.goto(path);
-  await page.waitForFunction(() => document.documentElement.dataset.authReady === 'true');
-}
-
 test('geschuetzte Route ohne Session leitet auf /login', async ({ page }) => {
   await gotoHydrated(page, '/lists');
   await expect(page).toHaveURL(/\/login\?next=%2Flists/);
