@@ -36,6 +36,23 @@ Der Wechsel erfordert nur den Austausch des Caddy-Service (Image + Caddyfile)
 und einen zusaetzlichen `lego`-Service; die uebrigen Dienste bleiben
 unveraendert. Der Renewal-Test ist im README dokumentiert.
 
+## Security-Baseline (T5.3b)
+
+Das Caddyfile setzt Security-Header (CSP, HSTS, X-Frame-Options/frame-ancestors,
+Referrer- und Permissions-Policy, nosniff) und Rate-Limit-Zonen fuer
+`/auth/v1/*`, `add_to_list` und die Invite-RPCs. Dafuer baut das Dockerfile
+zusaetzlich `github.com/mholt/caddy-ratelimit@v0.1.0` ein; Caddy selbst ist auf
+`v2.11.7` gepinnt. Begruendung, Limits, CSP-Ausnahmen und die Pruefschritte
+auf dem Docker-Host stehen in [`../docs/SECURITY.md`](../docs/SECURITY.md).
+
+Statische Pruefung ohne Docker:
+
+```bash
+node scripts/check-security-config.mjs
+```
+
+Der Check laeuft auch in der CI (`ci.yml`, Job `quality`).
+
 ## Zertifikatsablauf ueberwachen (T5.4)
 
 Caddy erneuert Let's-Encrypt-Zertifikate selbst; ob die Erneuerung wirklich

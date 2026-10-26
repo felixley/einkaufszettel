@@ -9,14 +9,69 @@
 
 	encode zstd gzip
 
-	# Supabase-REST-API (PostgREST erwartet den Pfad ohne /rest/v1)
-	handle_path /rest/v1/* {
+	# Security-Header fuer alle Antworten (auch Fehler und Redirects).
+	# Begruendung und CSP-Ausnahmen: docs/SECURITY.md.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+		-Server
+	}
+
+	# --- Rate-Limits (caddy-ratelimit v0.1.0) ---
+	# Schluessel ist die Client-IP; Limits gelten pro IP und Minute.
+
+	# Login, Token-Refresh, Passwort-Reset: 20 Ereignisse/Minute pro IP.
+	@auth path /auth/v1/*
+	handle @auth {
+		rate_limit {
+			zone auth_ip {
+				key {remote_host}
+				window 1m
+				events 20
+			}
+		}
+		# GoTrue erwartet den Pfad ohne /auth/v1.
+		uri strip_prefix /auth/v1
+		reverse_proxy auth:9999
+	}
+
+	# add_to_list ist der haeufigste Schreib-RPC: 60 Ereignisse/Minute pro IP.
+	@add_to_list path /rest/v1/rpc/add_to_list
+	handle @add_to_list {
+		rate_limit {
+			zone add_to_list_ip {
+				key {remote_host}
+				window 1m
+				events 60
+			}
+		}
+		uri strip_prefix /rest/v1
 		reverse_proxy rest:3000
 	}
 
-	# Supabase-Auth-API (GoTrue erwartet den Pfad ohne /auth/v1)
-	handle_path /auth/v1/* {
-		reverse_proxy auth:9999
+	# Einladungen erstellen/annehmen/pruefen/widerrufen: 10 Ereignisse/Minute pro IP.
+	@invite_rpc path /rest/v1/rpc/create_invite /rest/v1/rpc/accept_invite /rest/v1/rpc/check_invite /rest/v1/rpc/revoke_invite
+	handle @invite_rpc {
+		rate_limit {
+			zone invite_ip {
+				key {remote_host}
+				window 1m
+				events 10
+			}
+		}
+		uri strip_prefix /rest/v1
+		reverse_proxy rest:3000
+	}
+
+	# Uebrige Supabase-REST-API (PostgREST erwartet den Pfad ohne /rest/v1)
+	@rest path /rest/v1/*
+	handle @rest {
+		uri strip_prefix /rest/v1
+		reverse_proxy rest:3000
 	}
 
 	handle {

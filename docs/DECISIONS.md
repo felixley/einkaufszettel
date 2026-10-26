@@ -338,3 +338,36 @@ Tailwind jedoch nicht installiert (kein `tailwind.config.*`, keine Dependency);
 alle sechs Komponenten nutzen CSS-Module. `DeadLetterPanel.module.css` folgt
 daher der Repo-Konvention. Ein Tailwind-Setup nachzurüsten wäre ein eigener,
 projektweiter Umbau und nicht Teil von T4.3.
+
+## 2026-10-26 — T5.3b Security-Baseline: CSP-Kompromiss, Rate-Limit-Plugin, Audit
+
+- **Entscheidung 1 — CSP mit dokumentierter `unsafe-inline`-Ausnahme:**
+  `script-src` und `style-src` erlauben zusätzlich zu `'self'` das Schlüsselwort
+  `'unsafe-inline'`. Begründung: Next.js injiziert pro Request variable
+  Flight-/RSC-Inline-Skripte (statische Hashes scheitern) und `ThemeScript`
+  setzt das Theme vor dem ersten Paint inline; eine Nonce-Lösung würde einen
+  Eingriff in die App (Middleware/Response-Header pro Request) erfordern, den
+  der Auftrag ausdrücklich ausschließt. `unsafe-eval` bleibt verboten;
+  `object-src`, `base-uri`, `form-action` und `frame-ancestors` bleiben strikt.
+- **Entscheidung 2 — HSTS ohne `preload`:** `max-age=31536000; includeSubDomains`
+  ist gesetzt, `preload` bewusst nicht. Die Domain liegt unter `ipv64.net`;
+  Preload ist eine einseitige, schwer rücknehmbare Selbstverpflichtung und
+  setzt Kontrolle über die Eltern-Domain voraus.
+- **Entscheidung 3 — Rate-Limits per `caddy-ratelimit@v0.1.0`:** Drei Zonen pro
+  Client-IP: `/auth/v1/*` 20/min, `add_to_list` 60/min, Invite-RPCs 10/min.
+  Das Plugin ist upstream als WIP markiert; v0.1.0 ist das letzte Tag und wird
+  im Dockerfile gepinnt. Caddy selbst wird zusätzlich auf `v2.11.7` gepinnt,
+  damit der xcaddy-Build reproduzierbar bleibt. Alternative: kein Rate-Limit
+  (verworfen, weil T5.3 es fordert) oder ein anderes Plugin (keine stabile
+  Alternative mit Caddyfile-Support gefunden).
+- **Entscheidung 4 — Dependency-Audit mit temporärem npm-Production-Tree:**
+  Das Repo nutzt pnpm ohne `package-lock.json`. Für den geforderten
+  `npm audit --omit=dev`-Lauf wurde ein reines Production-Paket (apps/web-
+  Dependencies ohne Workspace-Verweis) in einem temporären Verzeichnis
+  aufgelöst und auditiert. Ergebnis: 0 Vulnerabilities bei 58 prod-
+  Dependencies (96 inkl. optional); Cross-Check `pnpm audit --prod` ebenfalls
+  0 bei 104 Dependencies. Keine Ausnahme nötig.
+- **Risiko/Status:** Konfiguration statisch geprüft (`26/26` Checks grün).
+  xcaddy-Build, `caddy validate`, echte Header- und 429-Läufe sind in der
+  Sandbox ohne Docker-Daemon nicht möglich und bleiben offener Docker-Host-
+  Nachweis (analog D14/T1.3). Details: `docs/SECURITY.md`.

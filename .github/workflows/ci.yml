@@ -44,6 +44,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Statische Pruefung der Security-Baseline (Caddyfile/Dockerfile).
+      # Kein Docker/caddy-Binary noetig; Exitcode 1 bei Abweichungen.
+      - name: Security config
+        run: node scripts/check-security-config.mjs
+
       - name: Test
         run: pnpm test
 
