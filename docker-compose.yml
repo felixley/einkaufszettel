@@ -1,9 +1,19 @@
 name: einkaufszettel
 
+# Logrotation: fuer jeden Dienst begrenzt `json-file` die Loggroesse auf
+# 10 MB pro Datei und haelt 3 Dateien vor (max. ~30 MB je Dienst). Das
+# verhindert das Volllaufen der Docker-Logs auf dem Heimserver.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   db:
     image: supabase/postgres:15.19.0.007
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
@@ -24,6 +34,7 @@ services:
   auth:
     image: supabase/gotrue:v2.197.0
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       db:
         condition: service_healthy
@@ -52,6 +63,7 @@ services:
   rest:
     image: postgrest/postgrest:v16.5
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       db:
         condition: service_healthy
@@ -75,6 +87,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_SUPABASE_URL: https://${DOMAIN:-localhost}
@@ -99,6 +112,7 @@ services:
       context: .
       dockerfile: caddy/Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - '${HTTPS_PORT:-443}:443'
     environment:
@@ -120,10 +134,27 @@ services:
     networks:
       - edge
 
+  # Optionales Monitoring — NICHT Teil des Kern-Stacks (Profil "monitoring"),
+  # damit der normale Start unbeeinflusst bleibt. Start:
+  #   docker compose --profile monitoring up -d uptime-kuma
+  # Siehe docs/OPERATIONS.md (Abschnitt Monitoring) fuer Checks und Alarmweg.
+  uptime-kuma:
+    image: louislam/uptime-kuma:2.5.7
+    restart: unless-stopped
+    logging: *default-logging
+    profiles: ['monitoring']
+    ports:
+      - '${UPTIME_KUMA_PORT:-3001}:3001'
+    volumes:
+      - uptime-kuma-data:/app/data
+    networks:
+      - edge
+
 volumes:
   db-data:
   caddy-data:
   caddy-config:
+  uptime-kuma-data:
 
 networks:
   backend:

@@ -145,7 +145,7 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
 - [ ] **T5.1** E2E-Suite vollständig in CI (Chromium + WebKit-Mobile-Emulation).
 - [ ] **T5.2** Lasttest k6: 10 Haushalte × 5 gleichzeitige Nutzer, p95 Sync-Latenz <1 s. Ergebnis in `docs/PERF.md`.
 - [ ] **T5.3** Security-Check: RLS-Tests vollständig, Dependency-Audit, Header (CSP, HSTS), Rate-Limits.
-- [ ] **T5.4** Betrieb: Backup + **getesteter Restore**, Update-Prozedur, Healthchecks, Logrotation, Monitoring (z. B. Uptime Kuma).
+- [x] **T5.4** Betrieb: Backup + **getesteter Restore**, Update-Prozedur, Healthchecks, Logrotation, Monitoring (z. B. Uptime Kuma).
 - [ ] **T5.5** Dogfooding 2 Wochen im eigenen Haushalt; Feedback in `docs/FEEDBACK.md`; Bugfix-Runde.
 - [ ] **T5.6** Release `v1.0.0`, Changelog, Deployment-Doku.
 

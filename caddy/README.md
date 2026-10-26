@@ -35,3 +35,23 @@ tls /certs/fullchain.pem /certs/key.pem
 Der Wechsel erfordert nur den Austausch des Caddy-Service (Image + Caddyfile)
 und einen zusaetzlichen `lego`-Service; die uebrigen Dienste bleiben
 unveraendert. Der Renewal-Test ist im README dokumentiert.
+
+## Zertifikatsablauf ueberwachen (T5.4)
+
+Caddy erneuert Let's-Encrypt-Zertifikate selbst; ob die Erneuerung wirklich
+greift, prueft `scripts/check-cert-expiry.sh` (Exit 1 = laeuft in <= 14 Tagen
+ab). Live gegen den veroeffentlichten Port:
+
+```bash
+./scripts/check-cert-expiry.sh "${DOMAIN}:443"
+```
+
+Ohne externen Portzugriff direkt auf die im Caddy-Volume abgelegten
+Zertifikate (Pfad je nach Volume-Namen):
+
+```bash
+CERT_GLOB='/var/lib/docker/volumes/einkaufszettel_caddy-data/_data/caddy/certificates/*/*/*.crt' \
+  ./scripts/check-cert-expiry.sh
+```
+
+Details und Alarmweg: [`docs/OPERATIONS.md`](../docs/OPERATIONS.md) §7/§8.

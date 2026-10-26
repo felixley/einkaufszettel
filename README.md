@@ -117,15 +117,22 @@ docker compose logs caddy | grep -i "certificate obtained"
 docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
 ```
 
-## Backup
+## Backup und Restore
 
 ```bash
-bash scripts/backup.sh
+bash scripts/backup.sh                     # .sql.gz + Metadaten, Retention 14 Tage
+bash scripts/test-restore.sh --mode auto   # Restore-Test (real mit PG, sonst Stub)
+RESTORE_CONFIRM=yes TARGET_DB=ez_restore_probe \
+  bash scripts/restore.sh backups/einkaufszettel-<TS>.sql.gz   # nie ohne TARGET_DB+Confirm
 ```
 
-Erzeugt `backups/einkaufszettel-<UTC-Zeitstempel>.sql.gz` (Exit 0, Datei > 0
-Byte). Cron-Beispiel: [`scripts/backup.cron.example`](./scripts/backup.cron.example)
-(täglich 03:17 UTC). Restore-Test gehoert zu T5.4.
+`backup.sh` erzeugt `backups/einkaufszettel-<UTC-Zeitstempel>.sql.gz` inkl.
+SHA-256-Sidecar, prüft die Integrität (`gzip -t` + Dump-Kopf) und räumt Archive
+älter als `RETENTION_DAYS` (Default 14) auf. `restore.sh` verlangt ein
+explizites `TARGET_DB` und `RESTORE_CONFIRM=yes`. Cron-Beispiele:
+[`scripts/backup.cron.example`](./scripts/backup.cron.example).
+**Vollständiges Runbook (Update, Healthchecks, Logrotation, Monitoring,
+Cert-Expiry, Restore/DR): [`docs/OPERATIONS.md`](./docs/OPERATIONS.md).**
 
 ## Nuetzliche Befehle
 
