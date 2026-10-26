@@ -344,3 +344,81 @@ describe('replayOutbox (idempotentes Replay)', () => {
     expect(outbox.entries).toHaveLength(1);
   });
 });
+
+describe('replayOutbox Backoff (T4.3a)', () => {
+  const fixedNow = () => '2026-01-01T00:00:00.000Z';
+
+  function failingAdapter(): SyncAdapter {
+    return {
+      upsert() {
+        throw new Error('offline');
+      },
+      softDelete() {
+        throw new Error('offline');
+      },
+      addToList() {
+        throw new Error('offline');
+      },
+    };
+  }
+
+  it('setzt bei Erfolg kein next_attempt_at und bleibt bei doppeltem Replay idempotent', async () => {
+    const adapter = makeAdapter();
+    const original = createOutbox([upsertEntry('e1', makeListItem({ id: 'item-1' }), ALL_FIELDS)]);
+
+    const first = await replayOutbox(original, adapter, { now: fixedNow });
+    const afterFirst = adapter.row('list_items', 'item-1');
+    const second = await replayOutbox(original, adapter, { now: fixedNow });
+
+    expect(first.applied).toEqual(['e1']);
+    expect(second.applied).toEqual(['e1']);
+    expect(first.outbox.entries).toHaveLength(0);
+    expect(second.outbox.entries).toHaveLength(0);
+    expect(first.deadLetter.entries).toHaveLength(0);
+    expect(adapter.allRows('list_items')).toHaveLength(1);
+    expect(adapter.row('list_items', 'item-1')).toEqual(afterFirst);
+  });
+
+  it('setzt next_attempt_at bei Fehlversuch aus fester Uhr', async () => {
+    const original = createOutbox([upsertEntry('e1', makeListItem(), ALL_FIELDS)]);
+
+    const result = await replayOutbox(original, failingAdapter(), { now: fixedNow });
+
+    expect(result.failed).toHaveLength(1);
+    expect(result.outbox.entries).toHaveLength(1);
+    expect(result.outbox.entries[0]?.attempts).toBe(1);
+    expect(result.outbox.entries[0]?.next_attempt_at).toBe('2026-01-01T00:00:01.000Z');
+  });
+
+  it('wendet den optionalen Jitter auch im Replay an', async () => {
+    const original = createOutbox([upsertEntry('e1', makeListItem(), ALL_FIELDS)]);
+
+    const result = await replayOutbox(original, failingAdapter(), {
+      now: fixedNow,
+      backoff: { jitter: true, rand: () => 0 },
+    });
+
+    expect(result.outbox.entries[0]?.next_attempt_at).toBe('2026-01-01T00:00:00.800Z');
+  });
+
+  it('dead-lettert nach 5 Versuchen mit Fehlertext und ohne next_attempt_at', async () => {
+    let outbox = createOutbox([upsertEntry('e1', makeListItem(), ALL_FIELDS)]);
+    let deadLetterEntry: OutboxEntry | undefined;
+
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const result = await replayOutbox(outbox, failingAdapter(), { now: fixedNow });
+      if (attempt < 5) {
+        expect(result.deadLettered).toEqual([]);
+        outbox = result.outbox;
+      } else {
+        expect(result.deadLettered).toEqual(['e1']);
+        expect(result.outbox.entries).toHaveLength(0);
+        deadLetterEntry = result.deadLetter.entries[0];
+      }
+    }
+
+    expect(deadLetterEntry?.attempts).toBe(5);
+    expect(deadLetterEntry?.last_error).toBe('offline');
+    expect(deadLetterEntry?.next_attempt_at).toBeUndefined();
+  });
+});

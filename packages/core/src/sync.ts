@@ -5,6 +5,9 @@ import {
   DEFAULT_MAX_ATTEMPTS,
   pending,
   recordFailure,
+  type BackoffOptions,
+  type Clock,
+  type FailureOptions,
   type Outbox,
   type OutboxEntry,
 } from './outbox.js';
@@ -31,6 +34,10 @@ export interface SyncAdapter {
 
 export interface ReplayOptions {
   maxAttempts?: number;
+  /** Injizierbare Uhr für `next_attempt_at`; Default `new Date()`. */
+  now?: Clock;
+  /** Backoff-Konfiguration (Jitter, Deckel). */
+  backoff?: BackoffOptions;
 }
 
 export interface ReplayResult {
@@ -40,6 +47,17 @@ export interface ReplayResult {
   applied: string[];
   failed: { id: string; error: unknown }[];
   deadLettered: string[];
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  try {
+    const serialized = JSON.stringify(error);
+    return serialized === undefined ? String(error) : serialized;
+  } catch {
+    return String(error);
+  }
 }
 
 async function applyEntry(adapter: SyncAdapter, entry: OutboxEntry): Promise<void> {
@@ -84,7 +102,12 @@ export async function replayOutbox(
       applied.push(entry.id);
     } catch (error) {
       failed.push({ id: entry.id, error });
-      const result = recordFailure(current, entry.id, maxAttempts);
+      const failureOptions: FailureOptions = {
+        ...(options.now === undefined ? {} : { now: options.now }),
+        ...(options.backoff === undefined ? {} : { backoff: options.backoff }),
+        lastError: errorText(error),
+      };
+      const result = recordFailure(current, entry.id, maxAttempts, failureOptions);
       current = result.outbox;
       if (result.deadLettered !== null) {
         deadLetter = { entries: [...deadLetter.entries, result.deadLettered] };

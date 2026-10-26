@@ -3,8 +3,12 @@ import { describe, expect, it } from 'vitest';
 import type { AddToListRequest } from './add-to-list.js';
 import {
   acknowledge,
+  BASE_RETRY_DELAY_MS,
   createOutbox,
+  DEFAULT_MAX_ATTEMPTS,
+  DEFAULT_RETRY_MAX_DELAY_MS,
   enqueue,
+  nextRetryDelayMs,
   pending,
   recordFailure,
   type AddToListEntry,
@@ -187,5 +191,145 @@ describe('Outbox-Queue', () => {
   it('behält bei client_ts-Gleichstand die deterministische id-Ordnung', () => {
     const outbox = createOutbox([upsertEntry('z', makeListItem({}, { id: 'z' }), ['name'], T0)]);
     expect(pending(outbox)[0]?.client_ts).toBe(T0);
+  });
+});
+
+describe('Backoff-Policy (T4.3a)', () => {
+  const fixedNow = () => '2026-01-01T00:00:00.000Z';
+
+  it('liefert die exponentielle Basissequenz und deckelt bei 60 s', () => {
+    expect([0, 1, 2, 3, 4, 5, 6, 7, 20].map((attempts) => nextRetryDelayMs(attempts))).toEqual([
+      BASE_RETRY_DELAY_MS,
+      BASE_RETRY_DELAY_MS,
+      2_000,
+      4_000,
+      8_000,
+      16_000,
+      32_000,
+      DEFAULT_RETRY_MAX_DELAY_MS,
+      DEFAULT_RETRY_MAX_DELAY_MS,
+    ]);
+  });
+
+  it('behandelt attempts 0 und 1 identisch als erste Wartezeit', () => {
+    expect(nextRetryDelayMs(0)).toBe(BASE_RETRY_DELAY_MS);
+    expect(nextRetryDelayMs(1)).toBe(BASE_RETRY_DELAY_MS);
+  });
+
+  it('wendet optionalen Jitter mit injizierter rand-Funktion deterministisch an', () => {
+    expect(nextRetryDelayMs(1, { jitter: true, rand: () => 0 })).toBe(800);
+    expect(nextRetryDelayMs(1, { jitter: true, rand: () => 0.5 })).toBe(1_000);
+    expect(nextRetryDelayMs(1, { jitter: true, rand: () => 1 })).toBe(1_200);
+  });
+
+  it('deckelt auch den gejitterten Wert bei 60 s', () => {
+    expect(nextRetryDelayMs(7, { jitter: true, rand: () => 0 })).toBe(48_000);
+    expect(nextRetryDelayMs(7, { jitter: true, rand: () => 1 })).toBe(DEFAULT_RETRY_MAX_DELAY_MS);
+    expect(nextRetryDelayMs(7)).toBe(DEFAULT_RETRY_MAX_DELAY_MS);
+  });
+
+  it('lässt Jitter standardmäßig aus und ignoriert rand ohne jitter=true', () => {
+    expect(nextRetryDelayMs(3, { rand: () => 0 })).toBe(4_000);
+    expect(nextRetryDelayMs(3)).toBe(4_000);
+  });
+
+  it('erlaubt einen benutzerdefinierten maxDelayMs-Deckel', () => {
+    expect(nextRetryDelayMs(10, { maxDelayMs: 5_000 })).toBe(5_000);
+    expect(nextRetryDelayMs(10, { maxDelayMs: 5_000, jitter: true, rand: () => 1 })).toBe(5_000);
+  });
+
+  it('wirft bei ungültigem attempts oder rand einen RangeError', () => {
+    expect(() => nextRetryDelayMs(-1)).toThrow(RangeError);
+    expect(() => nextRetryDelayMs(Number.NaN)).toThrow(RangeError);
+    expect(() => nextRetryDelayMs(1, { jitter: true, rand: () => 1.1 })).toThrow(RangeError);
+  });
+
+  it('setzt bei einem Fehlversuch attempts+1 und next_attempt_at aus fester Uhr', () => {
+    const outbox = createOutbox([upsertEntry('e1', makeListItem(), ['name'])]);
+    const result = recordFailure(outbox, 'e1', DEFAULT_MAX_ATTEMPTS, { now: fixedNow });
+
+    expect(result.deadLettered).toBeNull();
+    expect(result.outbox.entries).toHaveLength(1);
+    expect(result.outbox.entries[0]?.attempts).toBe(1);
+    expect(result.outbox.entries[0]?.next_attempt_at).toBe('2026-01-01T00:00:01.000Z');
+  });
+
+  it('folgt der Backoff-Sequenz bei wiederholten Fehlversuchen', () => {
+    let outbox = createOutbox([upsertEntry('e1', makeListItem(), ['name'])]);
+    const retryTimes: (string | undefined)[] = [];
+
+    for (let i = 0; i < 4; i += 1) {
+      const result = recordFailure(outbox, 'e1', DEFAULT_MAX_ATTEMPTS, { now: fixedNow });
+      expect(result.deadLettered).toBeNull();
+      outbox = result.outbox;
+      retryTimes.push(outbox.entries[0]?.next_attempt_at);
+    }
+
+    expect(retryTimes).toEqual([
+      '2026-01-01T00:00:01.000Z',
+      '2026-01-01T00:00:02.000Z',
+      '2026-01-01T00:00:04.000Z',
+      '2026-01-01T00:00:08.000Z',
+    ]);
+  });
+
+  it('verschiebt nach 5 Fehlversuchen ins Dead-Letter und hinterlegt den Fehlertext', () => {
+    let outbox = createOutbox([upsertEntry('e1', makeListItem(), ['name'])]);
+    for (let i = 0; i < 4; i += 1) {
+      const result = recordFailure(outbox, 'e1', DEFAULT_MAX_ATTEMPTS, { now: fixedNow });
+      expect(result.deadLettered).toBeNull();
+      outbox = result.outbox;
+    }
+
+    const final = recordFailure(outbox, 'e1', DEFAULT_MAX_ATTEMPTS, {
+      now: fixedNow,
+      lastError: 'offline',
+    });
+
+    expect(final.outbox.entries).toHaveLength(0);
+    expect(final.deadLettered?.id).toBe('e1');
+    expect(final.deadLettered?.attempts).toBe(DEFAULT_MAX_ATTEMPTS);
+    expect(final.deadLettered?.last_error).toBe('offline');
+  });
+
+  it('setzt last_error nicht, wenn kein Fehlertext übergeben wurde', () => {
+    let outbox = createOutbox([upsertEntry('e1', makeListItem(), ['name'])]);
+    for (let i = 0; i < 4; i += 1) {
+      outbox = recordFailure(outbox, 'e1', DEFAULT_MAX_ATTEMPTS, { now: fixedNow }).outbox;
+    }
+
+    const final = recordFailure(outbox, 'e1', DEFAULT_MAX_ATTEMPTS, { now: fixedNow });
+
+    expect(final.deadLettered).not.toBeNull();
+    expect(Object.hasOwn(final.deadLettered ?? {}, 'last_error')).toBe(false);
+  });
+
+  it('akzeptiert eine Clock, die ein Date liefert', () => {
+    const outbox = createOutbox([upsertEntry('e1', makeListItem(), ['name'])]);
+    const result = recordFailure(outbox, 'e1', DEFAULT_MAX_ATTEMPTS, {
+      now: () => new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    expect(result.outbox.entries[0]?.next_attempt_at).toBe('2026-01-01T00:00:01.000Z');
+  });
+
+  it('wendet Jitter auch beim Scheduling an', () => {
+    const outbox = createOutbox([upsertEntry('e1', makeListItem(), ['name'])]);
+    const result = recordFailure(outbox, 'e1', DEFAULT_MAX_ATTEMPTS, {
+      now: fixedNow,
+      backoff: { jitter: true, rand: () => 0 },
+    });
+
+    expect(result.outbox.entries[0]?.next_attempt_at).toBe('2026-01-01T00:00:00.800Z');
+  });
+
+  it('ist idempotent für unbekannte IDs und verändert die Outbox nicht', () => {
+    const outbox = createOutbox();
+    const first = recordFailure(outbox, 'unbekannt', DEFAULT_MAX_ATTEMPTS, { now: fixedNow });
+    const second = recordFailure(outbox, 'unbekannt', DEFAULT_MAX_ATTEMPTS, { now: fixedNow });
+
+    expect(first.outbox).toBe(outbox);
+    expect(first.deadLettered).toBeNull();
+    expect(second.outbox).toBe(outbox);
   });
 });

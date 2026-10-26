@@ -248,3 +248,22 @@ public.categories` → **13**, `category_rules` → **389**; zweiter
   `packages/core` grün. Projektweiter `pnpm lint` meldet derzeit nur
   Formatierung in `apps/web/lib/recipes/ingredient-line.ts` (parallele
   Frontend-Karte, außerhalb dieses Scopes).
+
+## 2026-10-26 — Outbox-Retry-Backoff (T4.3a)
+
+- **Entscheidung 1 — Wartezeit-Sequenz:** `nextRetryDelayMs` wächst exponentiell
+  (1 s, 2 s, 4 s, 8 s, 16 s …) und ist bei 60 s gedeckelt. `attempts` zählt die
+  bereits fehlgeschlagenen Versuche; 0 und 1 liefern 1 s. Begründung: kurze
+  erste Wartezeit für flüchtige Netzfehler, aber kein unbegrenztes Wachstum.
+- **Entscheidung 2 — Jitter:** Optionaler deterministischer ±20%-Jitter über
+  eine injizierbare `rand()`-Funktion (Default `Math.random`). Jitter ist
+  standardmäßig aus, damit die Basissequenz exakt und testbar bleibt; im Test
+  wird eine feste Funktion übergeben. Der Deckel gilt auch nach Jitter.
+- **Entscheidung 3 — Zustandsfelder:** `OutboxEntry` erhält optionale Felder
+  `next_attempt_at` (ISO) und `last_error`. Bei einem Fehlversuch werden
+  `attempts` erhöht und `next_attempt_at` aus der injizierbaren Uhr plus
+  Backoff gesetzt; ab `maxAttempts` (Default 5) wandert der Eintrag ins
+  Dead-Letter, verliert den Retry-Termin und trägt den Fehlertext. Erfolgreiche
+  Einträge werden unverändert quittiert. Reine Funktionen, keine I/O; die
+  Rückwärtskompatibilität bleibt durch optionale Felder erhalten. Die
+  Worker-/UI-Verdrahtung folgt in T4.3b, daher bleibt die PLAN-Checkbox offen.
