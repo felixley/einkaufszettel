@@ -286,3 +286,67 @@ Route zurück und unterbricht unser `goto`. Chromium gewinnt dieses Rennen
 - **Lokaler Gegenlauf auf demselben Stand** (Sandbox, WebKit dort nicht
   lauffähig): `chromium` + `mobile-chromium` **68 passed (5,6m)**, `pnpm test`
   **280/280**, `pnpm typecheck` und `pnpm lint` grün.
+
+## Restflakiness behoben 2026-10-27 (Karte `t_113dd842`, Commit `670482a`)
+
+Der aus Run `40409077482` verbliebene Retry-Bedarf (`1 flaky` in `webkit`,
+`household.spec.ts:65` A-3/A-4) ist behoben — **ohne** Retry-Erhöhung, **ohne**
+Test-Skip, **ohne** `continue-on-error` und **ohne** Produktivcode-Änderung.
+Der Flake ist kein D24-Rest (Navigation), sondern ein transientes UI-Element.
+
+**Ursache (lokal reproduziert, nicht geraten).** Nach `selectOption('viewer')`
+setzt `handleRoleChange()` den Erfolgs-Hinweis (`data-testid="member-info"`),
+ruft danach `load()` und `onHouseholdChanged?.()` auf. Letzteres lässt in
+`apps/web/app/household/page.tsx` `load()` mit `setLoading(true)` laufen; der
+Early-Return rendert für dieses Fenster „Lade Haushalt …“ statt der Seite — das
+`MemberManagementPanel` wird dabei **unmountet** und der `info`-State verworfen.
+Der anschließende Reload baut das Panel neu auf, `info` ist wieder `null`; der
+Hinweis kehrt nicht zurück.
+
+Belegt mit einem temporären MutationObserver-Probe-Spec (`e2e/`, chromium,
+lokal, nach der Messung wieder entfernt) — Transitions der Owner-Seite ab
+`selectOption('viewer')`:
+
+```text
+t=0     member-info=null                                    loading=false
+t=84ms  member-info="Rolle von … auf Viewer geaendert."      loading=false
+t=168ms member-info=null                                    loading=true
+```
+
+`member-info` ist also nur **~84 ms** sichtbar. In WebKit (Run `40409077482`)
+fiel die 15-s-Abtastung außerhalb dieses Fensters → „element(s) not found“,
+obwohl der Rollenwechsel selbst erfolgreich war.
+
+**Fix (Assertion, im Karten-Scope `apps/web/e2e/**`).** A-3/A-4 prüft den
+Rollenwechsel jetzt am stabilen, sichtbaren Beleg: `member-role` = „Viewer“ in
+der Mitgliederzeile der Owner-Seite. Das Wirken der Rolle auf B-Seite bleibt
+funktional geprüft über `write-probe` = „verweigert“. Der transiente Hinweis
+wird nicht mehr assertiert.
+
+**Echter CI-Lauf (Nachweis)** — Run `40439752212`, Workflow `E2E`, `master`,
+`670482a`, Job „Playwright (Chromium + WebKit-Mobile, alle Projekte)“
+**success** (8 m 13 s), Schritt „Run E2E tests“ **success**:
+
+```text
+  chromium          34 ✓   0 ✘
+  mobile-chromium   34 ✓   0 ✘
+  webkit            34 ✓   0 ✘
+  mobile-webkit     34 ✓   0 ✘
+
+  0 failed
+  0 flaky
+  4 skipped
+  132 passed (7.4m)
+```
+
+- **`1 flaky` → `0 flaky`**: `household.spec.ts:65` ist in `webkit` (6,2 s) und
+  `mobile-webkit` (5,5 s) grün; im Job-Log gibt es **keinen** Treffer für
+  `flaky`/`retry`/`failed` (nur die unveränderten 4 fachlichen Skips).
+- **Chromium-Lane unverändert 68/68** (34 + 34) — in CI und lokal.
+- **Lokal** (Sandbox, WebKit dort nicht lauffähig): `household.spec.ts` chromium
+  `--repeat-each=5` = **10 passed, 0 flaky** (ohne Retries, `retries=0`),
+  Chromium-Lane **68 passed (5,6 m)**, `pnpm test` **280/280**,
+  `pnpm typecheck` und `pnpm lint` grün.
+- **Nebenbefund (kein Release-Blocker, eigene Karte `t_23b4b0e9`):** derselbe
+  Mechanismus macht den Erfolgs-Hinweis für Nutzer praktisch unsichtbar
+  (~84 ms) — UX-Folgekarte mit Messbeleg und Fixrichtung.
