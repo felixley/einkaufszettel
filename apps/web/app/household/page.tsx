@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { getHouseholdAdapter } from '@/lib/household';
@@ -19,6 +19,11 @@ export default function HouseholdPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [name, setName] = useState('Mein Haushalt');
   const [creating, setCreating] = useState(false);
+  // Nur der erste Ladevorgang je Nutzer zeigt "Lade Haushalt …". Spaetere
+  // Refreshes (z. B. nach einem Rollenwechsel im MemberManagementPanel) laufen
+  // still, damit die Seite nicht in den Ladezustand kippt und das Panel samt
+  // Erfolgs-Hinweis (member-info) nicht unmountet wird.
+  const loadedForUserRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -31,7 +36,9 @@ export default function HouseholdPage() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (loadedForUserRef.current !== user.id) {
+      setLoading(true);
+    }
     setError(null);
     const result = await getHouseholdAdapter().getMyHousehold();
     if (result.ok) {
@@ -39,6 +46,7 @@ export default function HouseholdPage() {
     } else {
       setError(result.error.message);
     }
+    loadedForUserRef.current = user.id;
     setLoading(false);
   }, [user]);
 

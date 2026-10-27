@@ -110,14 +110,22 @@ test('A-3/A-4: Einladung einloesen, Rolle wirkt sofort, Entfernen entzieht Zugri
     await expect(inviteeRow.getByTestId('member-role')).toHaveText('Editor');
 
     // Editor -> Viewer wirkt sofort (ohne Reload auf B's Seite).
+    // Auf den stillen Seiten-Refresh warten, den `onHouseholdChanged` ausloest
+    // (action "me"), damit der Nachweis nicht nur den ~84-ms-Transienten trifft,
+    // sondern das Verhalten NACH dem Refresh. Vor dem Fix kippte die Seite in
+    // dieser Phase in "Lade Haushalt …", unmountete das Panel und verwarf den
+    // Hinweis; mit dem Fix bleibt er sichtbar.
+    const pageRefresh = owner.page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/mock/household') &&
+        (response.request().postData() ?? '').includes('"action":"me"'),
+    );
     await inviteeRow
       .getByRole('combobox', { name: `Rolle von ${inviteeName}` })
       .selectOption('viewer');
-    // Der Erfolgs-Hinweis (member-info) ist transient: `onHouseholdChanged` laesst
-    // die Seite neu laden (setLoading(true) + Early-Return), dabei wird das Panel
-    // unmountet und der Hinweis verworfen — in WebKit (Run 40409077482) war er
-    // innerhalb von 15 s nie sichtbar. Stabiler Beleg ist die Rollenanzeige in der
-    // Mitgliederzeile, die nach dem Reload aus dem Mock-Store neu aufgebaut wird.
+    await pageRefresh;
+    await expect(owner.page.getByTestId('member-info')).toBeVisible();
+    await expect(owner.page.getByTestId('member-info')).toContainText('Viewer');
     await expect(inviteeRow.getByTestId('member-role')).toHaveText('Viewer');
 
     await invitee.page.getByTestId('write-probe').click();
