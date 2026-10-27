@@ -523,3 +523,25 @@ projektweiter Umbau und nicht Teil von T4.3.
   und Chromium-Gate. Ohne PO-Entscheid kein Tag. Begründung und Optionen in
   `docs/REVIEW.md` §12.5 (D24) und im Handoff zu `t_6568b4f0`. Mit `e8a6b77` ist
   die WebKit-Lane grün; Option (A) ist damit erfüllt.
+
+## 2026-10-27 — Release v1.0.1: Patch-Release nach Architekt-Option A (D24)
+
+- **Entscheidung — Option A umgesetzt:** Der Patch-Release `v1.0.1` wird erst
+  nach **grüner** WebKit-Lane veröffentlicht. Voraussetzung ist erfüllt:
+  E2E-Run `40439752212` (`master` @ `670482a`) meldet 132 passed / 0 flaky /
+  0 failed / 4 skipped über alle vier Projekte. Damit ist die in der
+  D24-Entscheidung vorbereitete Option (A) gewählt; Option (B) (Release sofort
+  mit dokumentiertem D24 und Chromium-Gate) ist nicht mehr nötig.
+- **Version `1.0.1` konsistent** in Root-`package.json`,
+  `apps/web/package.json` und `packages/core/package.json`; Tag `v1.0.1` auf
+  dem Release-Commit. Release-Notes bleiben ein Auszug aus `CHANGELOG.md`
+  (Entscheidung 2 aus „Release v1.0.0“ gilt unverändert).
+- **Inhalt:** ausschließlich Fixes und Doku — D23 (CI-E2E-Timeout, `4e26cd5`),
+  D24 (WebKit-Navigations-Kollision, `e8a6b77`), Restflakiness WebKit
+  (`670482a`, `ca98e9d`) und der UX-Fix „Rollenwechsel-Hinweis bleibt sichtbar“
+  (`397f193`, Merge `6460ece`). Keine funktionalen Änderungen sonst.
+- **Risiko/Status:** Verifikation auf dem Release-Commit: `pnpm lint`,
+  `pnpm typecheck`, `pnpm test` (Vitest), `pnpm build` und Playwright
+  `chromium`+`mobile-chromium` 68/68 grün. Die offenen Docker-/Host-Nachweise
+  aus `v1.0.0` (T1.3/D14, Restore gegen den Compose-Stack, echter WebKit-Lauf
+  auf dem Host) bleiben unverändert offen und sind in `DEPLOY.md` §7 geführt.

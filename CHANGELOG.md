@@ -8,6 +8,38 @@ Maßgeblich bleibt [`PLAN.md`](./PLAN.md). Release-Nachweise sind in
 [`docs/REVIEW.md`](./docs/REVIEW.md) (QA-Abnahmen Wellen 1–5) und den
 `docs/TESTLOG-*.md` dokumentiert.
 
+## [1.0.1] — 2026-10-27
+
+Patch-Release. Behebt die nach `v1.0.0` aufgedeckten CI-/E2E-Themen und den
+UX-Fehler am Rollenwechsel-Hinweis. Keine funktionalen Änderungen am
+Produktivcode außer dem UX-Fix (Merge `6460ece`, Commit `397f193`).
+
+### Fixed
+
+- **D23 — CI-E2E-Timeout (webServer):** Core-Build als eigener Schritt in
+  `e2e.yml`; der E2E-Job startet dadurch zuverlässig (`4e26cd5`).
+- **D24 — WebKit-Lane in CI rot:** Zentraler E2E-Helfer
+  `apps/web/e2e/support/navigation.ts` (`settlePage`/`gotoHydrated`) wartet
+  offene RSC-/Fetch-Navigationen ab, bevor `page.goto()` läuft; die
+  Navigations-Kollision nach `createHousehold()` ist damit behoben
+  (`e8a6b77`). Kein `continue-on-error`, keine Projekt-Entfernung — die Suite
+  läuft weiter über alle vier Projekte.
+- **Restflakiness (`household.spec.ts:116`, WebKit):** WebKit-Rollenwechsel
+  prüft jetzt über einen stabilen Beleg statt über ein Navigations-Timing
+  (`670482a`, `ca98e9d`).
+- **UX — Rollenwechsel-Hinweis verschwand zu früh:** Der Hinweis bleibt jetzt
+  sichtbar, bis der Nutzer ihn bestätigt bzw. die Seite verlässt (`397f193`,
+  Merge `6460ece`).
+
+### CI-Nachweis
+
+- E2E-Run `40439752212` auf `master` @ `670482a`: **132 passed / 0 flaky /
+  0 failed / 4 skipped**, alle vier Projekte (`chromium`, `mobile-chromium`,
+  `webkit`, `mobile-webkit`) grün. Damit ist Option A aus dem D24-Bericht
+  erfüllt und die Voraussetzung für dieses Patch-Release gegeben.
+- Verifikation auf dem Release-Commit: `pnpm lint`, `pnpm typecheck`,
+  `pnpm test` (Vitest), `pnpm build` und Playwright Chromium **68/68** grün.
+
 ## [1.0.0] — 2026-10-26
 
 Erstes Release. Die Phasen 1–4 sind umgesetzt und von QA abgenommen; Phase 5
@@ -136,9 +168,9 @@ der Entwicklungs-Sandbox ohne Docker-Daemon nicht erbracht werden können:
   `caddy validate`, echte Security-Header (`curl -I`) und 429-Verhalten,
   gültiges Let's-Encrypt-Zertifikat inkl. Renewal-Dry-Run sowie ein
   Ende-zu-Ende-Lauf gegen PostgREST/Realtime.
-- **WebKit-Laufzeitnachweis**: Die Projekte `webkit`/`mobile-webkit` sind
-  konfiguriert und per `--list` validiert; der echte Lauf scheitert in der
-  Sandbox an fehlenden Systembibliotheken und ist auf CI/Host nachzuholen.
+- **WebKit-Laufzeitnachweis**: Mit `v1.0.1` in CI nachgeholt — Run
+  `40439752212` ist über alle vier Projekte grün (`webkit`/`mobile-webkit`
+  inklusive). Offen bleibt nur ein echter Lauf auf dem Docker-Host.
 - **Restore gegen den echten Compose-Stack** (in der Sandbox nur gegen
   portables PostgreSQL bzw. im Stub-/Dry-Run-Modus belegt).
 - **T5.5 — Dogfooding**: Die zweiwöchige Nutzung im eigenen Haushalt beginnt

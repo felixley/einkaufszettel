@@ -157,6 +157,14 @@ Jede Aufgabe enthält ein **Akzeptanzkriterium (AK)**.
 - [ ] **T5.5** Dogfooding 2 Wochen im eigenen Haushalt; Feedback in `docs/FEEDBACK.md`; Bugfix-Runde.
 - [x] **T5.6** Release `v1.0.0`, Changelog, Deployment-Doku. _AK:_ Tag `v1.0.0` auf dem Release-Commit, `CHANGELOG.md` (Features Phasen 1–4, bekannte offene Punkte), Version `1.0.0` konsistent in Root-/Web-/Core-`package.json`, Deployment-Doku (`DEPLOY.md` + `docs/OPERATIONS.md`); Verifikation `pnpm lint`, `typecheck`, `vitest` 280/280, Playwright Chromium 68/68, `build` — alles grün. Erledigt 2026-10-26 (`docs/DECISIONS.md`, Abschnitt „Release v1.0.0“); Release-Notes = Changelog-Auszug.
 
+- [x] **T5.6b** Patch-Release `v1.0.1` nach Architekt-Option A (D24): Tag
+      `v1.0.1` auf dem Release-Commit, `CHANGELOG.md` mit Fixes D23/D24/
+      Restflakiness/UX-Hinweis-Dauer, Version `1.0.1` konsistent in Root-/Web-/
+      Core-`package.json`; Verifikation `pnpm lint`, `typecheck`, `vitest`,
+      Playwright Chromium 68/68, `build` — grün. Erledigt 2026-10-27. Voraussetzung
+      war der grüne E2E-Run `40439752212` (`master` @ `670482a`: 132 passed /
+      0 flaky / 0 failed / 4 skipped, alle vier Projekte).
+
 🛑 **Human Gate 3:** Go-Live-Freigabe. _(Erteilt am 2026-10-26 durch den PO; T5.6 freigegeben, T5.5 Dogfooding läuft nach dem Release im Echtbetrieb.)_
 
 ## 6. Risiken & Mitigation (überarbeitet)
