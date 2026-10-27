@@ -113,7 +113,11 @@ test('A-3/A-4: Einladung einloesen, Rolle wirkt sofort, Entfernen entzieht Zugri
     await inviteeRow
       .getByRole('combobox', { name: `Rolle von ${inviteeName}` })
       .selectOption('viewer');
-    await expect(owner.page.getByTestId('member-info')).toContainText('Viewer');
+    // Der Erfolgs-Hinweis (member-info) ist transient: `onHouseholdChanged` laesst
+    // die Seite neu laden (setLoading(true) + Early-Return), dabei wird das Panel
+    // unmountet und der Hinweis verworfen — in WebKit (Run 40409077482) war er
+    // innerhalb von 15 s nie sichtbar. Stabiler Beleg ist die Rollenanzeige in der
+    // Mitgliederzeile, die nach dem Reload aus dem Mock-Store neu aufgebaut wird.
     await expect(inviteeRow.getByTestId('member-role')).toHaveText('Viewer');
 
     await invitee.page.getByTestId('write-probe').click();
